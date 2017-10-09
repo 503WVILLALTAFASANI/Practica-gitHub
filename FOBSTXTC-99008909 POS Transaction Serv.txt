@@ -1,0 +1,3747 @@
+OBJECT Codeunit 99008909 POS Transaction Server Utility										
+{										
+OBJECT-PROPERTIES										
+{										
+Date=06/10/17;										
+Time=10:55:17 a.m.;										
+Modified=Yes;										
+Version List=LSW17.1;										
+}										
+PROPERTIES										
+{										
+OnRun=BEGIN										
+"UpdateLookupTable('','');"										
+END;										
+										
+}										
+CODE										
+{										
+VAR										
+Globals@1000 : Codeunit 99008919;										
+Store@1001 : Record 99001470;										
+PosFuncProfile@1002 : Record 99001515;										
+DCUTIL3@1100409004 : Codeunit 99008920;										
+BOUtil@1005 : Codeunit 99001452;										
+POSTerminal@1006 : Record 99001471;										
+_PreparingTxt1@1200070000 : TextConst 'ENU=Preparing;ESP=Preparando';										
+_SendingTxt1@1007 : TextConst 'ENU=Sending;ESP=Enviando';										
+_DeleteTxt1@1008 : TextConst 'ENU=Deleting;ESP=Borrando';										
+"TSAction@1009 : ',Update,Delete';"										
+globalTempTrans@1200070002 : TEMPORARY Record 99001472;										
+POSFunc@1200070001 : Codeunit 99008900;										
+_ReadingTxt1@1200070003 : TextConst 'ENU=Reading;ESP=Leyendo';										
+ItemTrack@1100409000 : Codeunit 10001415;										
+InUse@1100409001 : Boolean;										
+POSFuncProfileWebRequest@1100409002 : Record 99008947;										
+WebServicesClient@1100409003 : Codeunit 99009513;										
+POSGUI@1100409005 : Codeunit 99001575;										
+Text001@1100409006 : TextConst 'ENU=Request %1 is only available as web request;ESP=La solicitud %1 s¢lo est  disponible como una	sol	ici	tu	d w	eb';					
+										
+PROCEDURE Initialize@1() : Boolean;										
+VAR										
+LocalDistribLocation@1100409000 : Record 99001512;										
+BEGIN										
+"IF PosFuncProfile.""Profile ID"" = '' THEN BEGIN"										
+Store.GET(Globals.StoreNo);										
+PosFuncProfile.GET(Globals.FunctionalityProfileID);										
+POSTerminal.GET(Globals.TerminalNo);										
+END;										
+										
+InUse := TSInUse(PosFuncProfile);										
+										
+EXIT(InUse);										
+END;										
+										
+PROCEDURE SendTransaction@2(VAR Trans@1000 : Record 99001472;DistLoc@1000000001 : Code[20];VoidTrans@1100409000 : Boolean) : Boolean	;									
+VAR										
+tmpError@1000000000 : Integer;										
+InterActive@1100409004 : Boolean;										
+SenderDistLoc@1100409003 : Code[10];										
+ReceiverDistLoc@1100409002 : Code[10];										
+MsgTxt@1100409001 : Text[30];										
+ProcessError@1100409006 : Boolean;										
+ErrorText@1100409005 : Text[1024];										
+DDControlDistLoc@1100409007 : Record 99001512;										
+BEGIN										
+//SendTransaction										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_TRANS_HEADER') AND (NOT VoidTrans) THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.SendTransHeader(Trans,VoidTrans,PosFuncProfile.TransUpdateReplCounter,ProcessError,ErrorText) THEN"										
+EXIT(FALSE);										
+EXIT(TRUE);										
+END;										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_TRANS_HEADER_VOID') AND (VoidTrans) THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.SendTransHeader(Trans,VoidTrans,PosFuncProfile.TransUpdateReplCounter,ProcessError,ErrorText) THEN"										
+EXIT(FALSE);										
+EXIT(TRUE);										
+END;										
+										
+MsgTxt := '';										
+InterActive := TRUE;										
+IF VoidTrans THEN BEGIN										
+"IF PosFuncProfile.""DD Void Transactions"" THEN BEGIN"										
+//*********************************										
+//* Data Director Mode										
+//*********************************										
+InterActive := FALSE;										
+"SenderDistLoc := PosFuncProfile.""Void Trans. Sender DD"";"										
+"ReceiverDistLoc := PosFuncProfile.""Void Trans. Receiver DD"";"										
+"MsgTxt := PosFuncProfile.FIELDNAME(""Void Posted Transaction"");"										
+END										
+ELSE BEGIN										
+//*********************************										
+//* Transaction Server Mode										
+//*********************************										
+"SenderDistLoc := PosFuncProfile.""Void Posted Transaction"";"										
+ReceiverDistLoc := '';										
+END;										
+END										
+ELSE BEGIN										
+"IF PosFuncProfile.""DD Send Transaction"" THEN BEGIN"										
+//*********************************										
+//* Data Director Mode										
+//*********************************										
+InterActive := FALSE;										
+"SenderDistLoc := PosFuncProfile.""Trans. Sender DD"";"										
+"ReceiverDistLoc := PosFuncProfile.""Trans. Receiver DD"";"										
+"MsgTxt := PosFuncProfile.FIELDNAME(""Send Transaction"");"										
+END										
+ELSE BEGIN										
+//*********************************										
+//* Transaction Server Mode										
+//*********************************										
+"SenderDistLoc := PosFuncProfile.""Send Transaction"";"										
+ReceiverDistLoc := '';										
+END;										
+END;										
+										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"//DCUTIL3.StartUpdateRequest(SenderDistLoc,InterActive,MsgTxt);  //LS7.1-03"										
+//LS7.1-03-										
+"IF NOT(DCUTIL3.StartUpdateRequest(SenderDistLoc,InterActive,MsgTxt)) THEN"										
+EXIT(FALSE);										
+//LS7.1-03+										
+										
+IF NOT InterActive THEN BEGIN										
+DCUTIL3.StartForward();										
+END;										
+										
+DCUTIL3.SendTransaction(Trans);										
+										
+IF NOT InterActive THEN BEGIN										
+//***************************************										
+//* Data Director Mode										
+//***************************************										
+DCUTIL3.EndForward;										
+DCUTIL3.AddReceiver(ReceiverDistLoc);										
+END;										
+										
+"EXIT(DCUTIL3.SendAndDisconnect(tmpError,InterActive));"										
+END;										
+										
+PROCEDURE SendWholeTmpTransaction@1200070015() : Boolean;										
+VAR										
+SE@1002 : Record 99001473;										
+PE@1003 : Record 99001474;										
+IEE@1004 : Record 99001475;										
+IE@1005 : Record 99001478;										
+CE@1006 : Record 99001477;										
+TE@1200070000 : Record 99001465;										
+TI@1200070001 : Record 99001490;										
+PCE@1200070002 : Record 99008987;										
+VL@1200070003 : Record 99008991;										
+TC@1100409000 : Record 99001626;										
+TS@1100409001 : Record 99001630;										
+MM@10012000 : Record 99001496;										
+Trans@10012001 : Record 99001472;										
+TransStatus@10012002 : Record 99001493;										
+TransSalesEntryStatus@10012003 : Record 99001494;										
+tmpError@1000000000 : Integer;										
+Prepared@1200070004 : Boolean;										
+InterActive@1100409003 : Boolean;										
+SenderDistLoc@1100409002 : Code[10];										
+TOH@1100409004 : Record 10012703;										
+TOE@1100409005 : Record 10012704;										
+OptionValueBuffer@1100409006 : TEMPORARY Record 10012712;										
+OTVH@1100409007 : Record 10012712;										
+OTVe@1100409008 : Record 10012713;										
+ProcessError@1100409009 : Boolean;										
+ErrorText@1100409010 : Text[1024];										
+LocalDistLoc@1100409011 : Record 99001512;										
+TransDiscEntry@1100409012 : Record 99001642;										
+TransDiscBenefitEntry@1100409013 : Record 99001674;										
+xProcessOrderEntry@1100409014 : Record 99009038;										
+TransOrderDisc@1100409015 : Record 10012707;										
+TransPointEntry_l@1100409016 : Record 99001495;										
+PPH@1100409017 : Record 99001787;										
+PPL@1100409018 : Record 99001788;										
+BEGIN										
+//SendWholeTmpTransaction										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_TRANSACTION') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + Trans.TABLECAPTION);										
+IF globalTempTrans.FIND('-') THEN										
+REPEAT										
+"Trans.GET(globalTempTrans.""Store No."",globalTempTrans.""POS Terminal No."",globalTempTrans.""Transaction No."");"										
+"IF NOT WebServicesClient.SendTransaction(Trans,ProcessError,ErrorText) THEN BEGIN"										
+"UpdateTSWTErrorMessage(DATABASE::""Transaction Header"",FORMAT(Trans.""Transaction No.""),'',"										
+"Trans.""Store No."",Trans.""POS Terminal No."",Trans.""Transaction No."",ErrorText);"										
+EXIT(FALSE);										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+EXIT(TRUE);										
+END;										
+										
+InterActive := TRUE;										
+"IF PosFuncProfile.""DD Send Transaction"" THEN BEGIN"										
+//*********************************										
+//* Data Director Mode										
+//*********************************										
+InterActive := FALSE;										
+"SenderDistLoc := PosFuncProfile.""Trans. Sender DD"";"										
+IF SenderDistLoc = '' THEN										
+EXIT(FALSE);										
+"IF PosFuncProfile.""Trans. Receiver DD"" = '' THEN"										
+EXIT(FALSE);										
+END										
+ELSE BEGIN										
+//*********************************										
+//* Transaction Server Mode										
+//*********************************										
+"SenderDistLoc := PosFuncProfile.""Send Transaction"";"										
+IF SenderDistLoc = '' THEN										
+EXIT(FALSE);										
+END;										
+										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"//DCUTIL3.StartUpdateRequest(SenderDistLoc,InterActive,PosFuncProfile.FIELDNAME(""Send Transaction""));  //LS7.1-03"										
+//LS7.1-03-										
+"IF NOT(DCUTIL3.StartUpdateRequest(SenderDistLoc,InterActive,PosFuncProfile.FIELDNAME(""Send Transaction""))) THEN"										
+EXIT(FALSE);										
+//LS7.1-03+										
+IF NOT InterActive THEN BEGIN										
+DCUTIL3.StartForward;										
+END;										
+										
+POSGUI.ScreenDisplay(_PreparingTxt1 + ' ' + Trans.TABLECAPTION);										
+										
+IF globalTempTrans.FIND('-') THEN BEGIN										
+DCUTIL3.PrepareTransaction;										
+REPEAT										
+"Trans.GET(globalTempTrans.""Store No."",globalTempTrans.""POS Terminal No."",globalTempTrans.""Transaction No."");"										
+DCUTIL3.SendTransaction2(Trans);										
+UNTIL globalTempTrans.NEXT = 0;										
+DCUTIL3.EndRequest;										
+END;										
+										
+Prepared := FALSE;										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"SE.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"SE.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"SE.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF SE.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareSendSalesEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendSalesEntry2(SE);										
+UNTIL SE.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"PE.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"PE.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"PE.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF PE.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PreparePaymentEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendPaymentEntry2(PE);										
+UNTIL PE.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"IEE.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"IEE.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"IEE.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF IEE.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareIncExpEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendIncExpEntry2(IEE);										
+UNTIL IEE.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"IE.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"IE.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"IE.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF IE.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareInfoCodeEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendInfoCodeEntry2(IE);										
+UNTIL IE.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"CE.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"CE.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"CE.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF CE.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareCouponEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendCouponEntry2(CE);										
+UNTIL CE.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"TE.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"TE.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"TE.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF TE.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareTendDeclEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendTendDeclEntry2(TE);										
+UNTIL TE.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"TI.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"TI.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"TI.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF TI.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareInventoryEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendInventoryEntry2(TI);										
+UNTIL TI.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+"PCE.SETCURRENTKEY(""Store No."",""POS Terminal No."",""Transaction No."",""Line No."");"										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"PCE.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"PCE.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"PCE.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF PCE.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareCardEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendCardEntry2(PCE);										
+UNTIL PCE.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"Trans.GET(globalTempTrans.""Store No."",globalTempTrans.""POS Terminal No."",globalTempTrans.""Transaction No."");"										
+"VL.SETRANGE(""Receipt No."",Trans.""Receipt No."");"										
+IF VL.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareVoidedLine;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendVoidedLine2(VL);										
+UNTIL VL.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"MM.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"MM.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"MM.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF MM.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareMMEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendMMEntry2(MM);										
+UNTIL MM.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"TC.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"TC.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"TC.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF TC.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareCashDeclEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendCashDeclEntry2(TC);										
+UNTIL TC.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"TS.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"TS.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"TS.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF TS.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareSafeEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendSafeEntry2(TS);										
+UNTIL TS.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"TransStatus.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"TransStatus.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"TransStatus.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF TransStatus.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareTransStatus;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendTransStatus2(TransStatus);										
+UNTIL TransStatus.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"TransSalesEntryStatus.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"TransSalesEntryStatus.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"TransSalesEntryStatus.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF TransSalesEntryStatus.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareTransSalesEntryStatus;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendTransSalesEntryStatus2(TransSalesEntryStatus);										
+UNTIL TransSalesEntryStatus.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"TOH.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"TOH.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"TOH.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF TOH.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareTransOrderHeader;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendTransOrderHeader2(TOH);										
+UNTIL TOH.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"TOE.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"TOE.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"TOE.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF TOE.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareTransOrderEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendTransOrderEntry2(TOE);										
+"IF TOE.""Configuration ID"" <> '' THEN BEGIN"										
+OptionValueBuffer.INIT;										
+"OptionValueBuffer.""Configuration ID"" := TOE.""Configuration ID"";"										
+OptionValueBuffer.INSERT;										
+END;										
+UNTIL TOE.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF OptionValueBuffer.FIND('-') THEN REPEAT										
+"OTVH.SETRANGE(""Configuration ID"",OptionValueBuffer.""Configuration ID"");"										
+IF OTVH.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareOptionValueHeader;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendOptionValueHeader2(OTVH);										
+UNTIL OTVH.NEXT = 0;										
+END;										
+UNTIL OptionValueBuffer.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF OptionValueBuffer.FIND('-') THEN REPEAT										
+"OTVe.SETRANGE(""Configuration ID"",OptionValueBuffer.""Configuration ID"");"										
+IF OTVe.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareOptionValueEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendOptionValueEntry2(OTVe);										
+UNTIL OTVe.NEXT = 0;										
+END;										
+UNTIL OptionValueBuffer.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+										
+Prepared := FALSE;										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"TransDiscEntry.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"TransDiscEntry.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"TransDiscEntry.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF TransDiscEntry.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareTransDiscEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendTransDiscEntry2(TransDiscEntry);										
+UNTIL TransDiscEntry.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"TransOrderDisc.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"TransOrderDisc.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"TransOrderDisc.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF TransOrderDisc.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareTransOrderDisc;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendTransOrderDisc2(TransOrderDisc);										
+UNTIL TransOrderDisc.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"TransDiscBenefitEntry.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"TransDiscBenefitEntry.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"TransDiscBenefitEntry.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF TransDiscBenefitEntry.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareTransBenefitEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendTransBenefitEntry2(TransDiscBenefitEntry);										
+UNTIL TransDiscBenefitEntry.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+										
+{ //LS7.1-02 -										
+Prepared := FALSE;										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"ProcessOrderEntry.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"ProcessOrderEntry.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"ProcessOrderEntry.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF ProcessOrderEntry.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareProcessOrderEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendProcessOrderEntry2(ProcessOrderEntry);										
+UNTIL ProcessOrderEntry.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+} //LS7.1-02 +										
+//LS7.1-02 -										
+Prepared := FALSE;										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"TransPointEntry_l.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"TransPointEntry_l.SETRANGE(""POS Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"TransPointEntry_l.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF TransPointEntry_l.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PrepareTransPointEntry;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendTransPointEntry2(TransPointEntry_l);										
+UNTIL TransPointEntry_l.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+//LS7.1-02 +										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+										
+//LS7.1-06-										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"PPH.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"PPH.SETRANGE(""Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"PPH.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF PPH.FINDFIRST THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PreparePOSPrintHeader;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendPOSPrintHeader2(PPH);										
+UNTIL PPH.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+										
+IF globalTempTrans.FIND('-') THEN REPEAT										
+"PPL.SETRANGE(""Store No."",globalTempTrans.""Store No."");"										
+"PPL.SETRANGE(""Terminal No."",globalTempTrans.""POS Terminal No."");"										
+"PPL.SETRANGE(""Transaction No."",globalTempTrans.""Transaction No."");"										
+IF PPL.FIND('-') THEN BEGIN										
+IF NOT Prepared THEN BEGIN										
+DCUTIL3.PreparePOSPrintLine;										
+Prepared := TRUE;										
+END;										
+REPEAT										
+DCUTIL3.SendPOSPrintLine2(PPL);										
+UNTIL PPL.NEXT = 0;										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+IF Prepared THEN										
+DCUTIL3.EndRequest;										
+Prepared := FALSE;										
+//LS7.1-06+										
+										
+POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + Trans.TABLECAPTION);										
+										
+IF NOT InterActive THEN BEGIN										
+//***************************************										
+//* Data Director Mode										
+//***************************************										
+DCUTIL3.EndForward;										
+"DCUTIL3.AddReceiver(PosFuncProfile.""Trans. Receiver DD"");"										
+END;										
+										
+"EXIT(DCUTIL3.SendAndDisconnect(tmpError,InterActive));"										
+END;										
+										
+PROCEDURE SendAtEndOfTransaction@4(Trans@1000 : Record 99001472);										
+VAR										
+DataEntry@1001 : Record 99001558;										
+tmpDataEntry@1002 : Record 99001558;										
+InfoEntry@1003 : Record 99001478;										
+InfoCode@1004 : Record 99001482;										
+RefTrans@1200070000 : Record 99001472;										
+ok@1007 : Boolean;										
+tmpERROR@1008 : Integer;										
+VoucherEntries@1200070001 : Record 99001467;										
+LoyaltyPointsTrans@1200070002 : Record 99001495;										
+TransPointEntry_l@1100409000 : Record 99001495;										
+BEGIN										
+//SendAtEndOfTransaction										
+//LS7.1-02 -										
+"IF Trans.""Member Card No."" <> '' THEN"										
+"CreateTSRetryEntry(DATABASE::""Member Process Order Entry"",Trans.""Receipt No."",'0',PosFuncProfile.Member,TSAction::Update,0,FALSE"	","									
+"Trans.""Store No."",Trans.""POS Terminal No."",Trans.""Transaction No."",'');"										
+//LS7.1-02 +										
+IF NOT Initialize THEN										
+EXIT;										
+										
+"IF PosFuncProfile.""TS Send Transactions"" OR PosFuncProfile.""DD Send Transaction"" THEN"										
+"CreateTSRetryEntry(DATABASE::""Transaction Header"",FORMAT(Trans.""Transaction No.""),'',PosFuncProfile.""Send Transaction"","										
+"TSAction::Update,0,TRUE,"										
+"Trans.""Store No."",Trans.""POS Terminal No."",Trans.""Transaction No."",'');"										
+										
+"IF PosFuncProfile.""TS Data Entries"" OR PosFuncProfile.""DD Data Entry"" THEN BEGIN"										
+"InfoEntry.SETRANGE(""Store No."",Trans.""Store No."");"										
+"InfoEntry.SETRANGE(""POS Terminal No."",Trans.""POS Terminal No."");"										
+"InfoEntry.SETRANGE(""Transaction No."",Trans.""Transaction No."");"										
+"InfoEntry.SETFILTER(Infocode,'<>%1','TEXT');"										
+IF InfoEntry.FIND('-') THEN REPEAT										
+InfoCode.GET(InfoEntry.Infocode);										
+"IF (InfoCode.Type = InfoCode.Type::""Create Data Entry"") OR"										
+"(InfoCode.Type = InfoCode.Type::""Apply To Entry"") THEN"										
+"IF DataEntry.GET(InfoCode.""Data Entry Type"",InfoEntry.Information) THEN BEGIN"										
+"CreateTSRetryEntry(DATABASE::""POS Data Entry"","										
+"BOUtil.CombineTableKey(2,DataEntry.""Entry Type"",DataEntry.""Entry Code"",'','',''),'',"										
+"PosFuncProfile.""Data Entries"",TSAction::Update,0,FALSE,"										
+"'','',0,'');"										
+END;										
+UNTIL InfoEntry.NEXT = 0;										
+										
+VoucherEntries.RESET;										
+"VoucherEntries.SETCURRENTKEY(""Store No."",""POS Terminal No."",""Transaction No."");"										
+"VoucherEntries.SETRANGE(""Store No."",Trans.""Store No."");"										
+"VoucherEntries.SETRANGE(""POS Terminal No."",Trans.""POS Terminal No."");"										
+"VoucherEntries.SETRANGE(""Transaction No."",Trans.""Transaction No."");"										
+IF VoucherEntries.FIND('-') THEN REPEAT										
+"CreateTSRetryEntry(DATABASE::""Voucher Entries"","										
+"BOUtil.IntegerToStr(VoucherEntries.""Line No.""),"										
+"'',"										
+"PosFuncProfile.""Data Entries"",TSAction::Update,0,FALSE,"										
+"VoucherEntries.""Store No."",VoucherEntries.""POS Terminal No."",VoucherEntries.""Transaction No."",'');"										
+UNTIL VoucherEntries.NEXT = 0;										
+END;										
+										
+{ //LS7.1-02 -										
+"IF PosFuncProfile.""TS Member"" OR PosFuncProfile.""DD Member"" THEN BEGIN"										
+LoyaltyPointsTrans.RESET();										
+"LoyaltyPointsTrans.SETRANGE(LoyaltyPointsTrans.""Store No."",Trans.""Store No."");"										
+"LoyaltyPointsTrans.SETRANGE(LoyaltyPointsTrans.""POS Terminal No."",Trans.""POS Terminal No."");"										
+"LoyaltyPointsTrans.SETRANGE(LoyaltyPointsTrans.""Transaction No."",Trans.""Transaction No."");"										
+IF LoyaltyPointsTrans.FIND('-') THEN										
+REPEAT										
+"CreateTSRetryEntry(DATABASE::""Trans. Point Entry"","										
+"LoyaltyPointsTrans.""Receipt No."","										
+"BOUtil.OptToStr(LoyaltyPointsTrans.""Entry Type""),"										
+"PosFuncProfile.Member,TSAction::Update,0,FALSE,"										
+"LoyaltyPointsTrans.""Store No."",LoyaltyPointsTrans.""POS Terminal No."",LoyaltyPointsTrans.""Transaction No."",'');"										
+"CreateTSRetryEntry(DATABASE::""Member Process Order Entry"","										
+"LoyaltyPointsTrans.""Receipt No."","										
+"BOUtil.OptToStr(LoyaltyPointsTrans.""Entry Type""),"										
+"PosFuncProfile.Member,TSAction::Update,0,FALSE,"										
+"LoyaltyPointsTrans.""Store No."",LoyaltyPointsTrans.""POS Terminal No."",LoyaltyPointsTrans.""Transaction No."",'');"										
+UNTIL LoyaltyPointsTrans.NEXT() = 0;										
+END;										
+} //LS7.1-02 +										
+										
+"// If a transaction was refunded, update the refunded one"										
+										
+"IF (PosFuncProfile.""TS Void Transactions"" OR PosFuncProfile.""DD Void Transactions"") AND"										
+"(Trans.""Retrieved from Receipt No."" <> '') THEN BEGIN"										
+"RefTrans.SETCURRENTKEY(""Receipt No."");"										
+"RefTrans.SETRANGE(""Receipt No."",Trans.""Retrieved from Receipt No."");"										
+IF RefTrans.FIND('+') THEN										
+"CreateTSRetryEntry(DATABASE::""Transaction Header"",FORMAT(RefTrans.""Transaction No.""),'',"										
+"PosFuncProfile.""Void Posted Transaction"",TSAction::Update,0,FALSE,"										
+"RefTrans.""Store No."",RefTrans.""POS Terminal No."",RefTrans.""Transaction No."",'');"										
+END;										
+END;										
+										
+PROCEDURE UnsentTransactionsExist@20() : Boolean;										
+VAR										
+RetryAction@1200070000 : Record 99001615;										
+BEGIN										
+//UnsentTransactionsExist										
+EXIT(RetryAction.FIND('-'));										
+END;										
+										
+PROCEDURE SendPOSTrans@5(POSTransaction@1000 : Record 99008980;DistLoc@1200070001 : Code[10];WebRequestID@1100409000 : Text[30]) : B	ool	ean	;							
+VAR										
+tmpError@1000000000 : Integer;										
+ProcessError@1100409002 : Boolean;										
+ErrorText@1100409001 : Text[1024];										
+LocalDistLocation@1100409003 : Record 99001512;										
+BEGIN										
+//SendPOSTrans										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",WebRequestID) THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.SendPosTrans(WebRequestID,POSTransaction,ProcessError,ErrorText) THEN"										
+EXIT(FALSE);										
+EXIT(TRUE);										
+END;										
+										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+{  //LS7.1-03										
+"DCUTIL3.StartUpdateRequest(DistLoc,TRUE,'');"										
+DCUTIL3.UpdatePOSTrans(POSTransaction);										
+}  //LS7.1-03										
+//LS7.1-03-										
+"IF NOT(DCUTIL3.StartUpdateRequest(DistLoc,TRUE,'')) THEN"										
+EXIT(FALSE);										
+IF NOT(DCUTIL3.UpdatePOSTrans(POSTransaction)) THEN										
+EXIT(FALSE);										
+//LS7.1-03+										
+"EXIT(DCUTIL3.SendAndDisconnect(tmpError,TRUE));"										
+END;										
+										
+PROCEDURE GetPOSTrans@6(VAR PosTrans@1000 : Record 99008980;ReceiptNo@1001 : Code[20];VAR ErrorCode@1002 : Integer) : Boolean;										
+BEGIN										
+//GetPOSTrans										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"EXIT(DCUTIL3.GetSpecPOSTrans(ReceiptNo,PosTrans,ErrorCode));"										
+END;										
+										
+PROCEDURE GetPOSTransLines@7(SlipNumber@1000 : Code[20];VAR ErrorCode@1001 : Integer) : Boolean;										
+VAR										
+LocalDistLocation@1100409000 : Record 99001512;										
+BEGIN										
+//GetPOSTransLines										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"EXIT(DCUTIL3.GetMultiPOSTransLines(SlipNumber,PosFuncProfile.""Susp./Retr. Transaction"",ErrorCode));"										
+END;										
+										
+PROCEDURE DeletePOSTrans@8(SlipNumber@1000 : Code[20]);										
+VAR										
+tmpError@1000000000 : Integer;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+LocalDistLocation@1100409002 : Record 99001512;										
+BEGIN										
+//DeletePOSTrans										
+IF NOT Initialize THEN										
+EXIT;										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'DELETE_POSTRANS_SUSP')  THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.DeletePosTrans('DELETE_POSTRANS_SUSP',SlipNumber,ProcessError,ErrorText) THEN"										
+"CreateTSRetryEntry(DATABASE::""POS Transaction"",SlipNumber,'',PosFuncProfile.""Susp./Retr. Transaction"","										
+"TSAction::Delete,0,TRUE,"										
+"'','',0,'DELETE_POSTRANS_SUSP');"										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.DeleteSpecPOSTrans(SlipNumber,PosFuncProfile.""Susp./Retr. Transaction"") THEN"										
+"CreateTSRetryEntry(DATABASE::""POS Transaction"",SlipNumber,'',PosFuncProfile.""Susp./Retr. Transaction"","										
+"TSAction::Delete,0,TRUE,"										
+"'','',0,'');"										
+END;										
+END;										
+										
+PROCEDURE ReadSuspendedPOSTrans@9(VAR ErrorCode@1000 : Integer) : Boolean;										
+VAR										
+PosTransTemp@1100409000 : TEMPORARY Record 99008980;										
+PosTrans@1100409003 : Record 99008980;										
+ProcessError@1100409002 : Boolean;										
+ErrorText@1100409001 : Text[1024];										
+LocalDistLocation@1100409004 : Record 99001512;										
+BEGIN										
+//ReadSuspendedPOSTrans										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_POSTRANS_SUSP_LIST')  THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetPosTransList('',PosTransTemp,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+PosTransTemp.RESET;										
+IF PosTransTemp.FIND('-') THEN										
+REPEAT										
+PosTrans.INIT;										
+PosTrans := PosTransTemp;										
+IF NOT PosTrans.INSERT THEN										
+PosTrans.MODIFY;										
+UNTIL PosTransTemp.NEXT = 0;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+EXIT(DCUTIL3.GetMultiSuspendedPOSTrans(ErrorCode));										
+END;										
+END;										
+										
+PROCEDURE UpdateDataEntry@11(VAR DataEntry@1000 : Record 99001558) : Boolean;										
+VAR										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+LocalDistLocation@1100409002 : Record 99001512;										
+BEGIN										
+//UpdateDataEntry										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_DATA_ENTRY') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.SendDataEntry(DataEntry,ProcessError,ErrorText) THEN BEGIN"										
+"DataEntry.VALIDATE(""Replication Counter"");"										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.UpdateDataEntry(DataEntry,TRUE) THEN BEGIN"										
+"DataEntry.VALIDATE(""Replication Counter"");"										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END;										
+END;										
+										
+PROCEDURE GetDataEntry@12(Type@1000 : Code[20];Code@1001 : Code[20];VAR DataEntry@1002 : Record 99001558;VAR ErrorCode@1000000001 :	Int	ege	r)	:	Boolean;					
+VAR										
+DataEntry2@1004 : Record 99001558;										
+DataEntryTemp@1100409002 : TEMPORARY Record 99001558;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+LocalDistLocation@1100409003 : Record 99001512;										
+BEGIN										
+//GetDataEntry										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS Data Entries"" OR PosFuncProfile.""DD Data Entry"" THEN BEGIN"										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_DATA_ENTRY') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetDataEntry(Type,Code,DataEntryTemp,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+DataEntry := DataEntryTemp;										
+END ELSE BEGIN										
+"ErrorText := STRSUBSTNO(Text001,'GET_DATA_ENTRY');"										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+END ELSE										
+EXIT(FALSE);										
+"IF NOT DataEntry2.GET(Type,Code) THEN"										
+DataEntry.INSERT										
+ELSE										
+DataEntry.MODIFY;										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetStaff@13(VAR Staff@1000 : Record 99001461;ID@1001 : Code[20];VAR ErrorCode@1002 : Integer) : Boolean;										
+VAR										
+StaffTemp@1100409002 : TEMPORARY Record 99001461;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+LocalDistLocation@1100409003 : Record 99001512;										
+BEGIN										
+//GetSTaff										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS Staff"" THEN BEGIN"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_STAFF') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetStaff(ID,StaffTemp,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+Staff := StaffTemp;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"EXIT(DCUTIL3.GetSpecStaff(ID,Staff,ErrorCode));"										
+END;										
+END;										
+										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE UpdateStaff@1200070000(VAR Staff@1000 : Record 99001461) : Boolean;										
+VAR										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+LocalDistLocation@1100409002 : Record 99001512;										
+BEGIN										
+//UpdateStaff										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS Staff"" THEN BEGIN"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_STAFF') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.SendStaff(Staff,ProcessError,ErrorText) THEN BEGIN"										
+"CreateTSRetryEntry(DATABASE::Staff,Staff.ID,'',PosFuncProfile.""Staff Validation"","										
+"TSAction::Update,0,FALSE,"										
+"'','',0,'');"										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.UpdateStaff(Staff,TRUE) THEN BEGIN"										
+"CreateTSRetryEntry(DATABASE::Staff,Staff.ID,'',PosFuncProfile.""Staff Validation"","										
+"TSAction::Update,0,FALSE,"										
+"'','',0,'');"										
+EXIT(FALSE);										
+END;										
+END;										
+END;										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE UpdateStaffStatus@14(StaffID@1000 : Code[20];POS@1001 : Code[10];Login@1002 : Boolean) : Boolean;										
+VAR										
+Status@1003 : Record 99001615;										
+tmpError@1000000000 : Integer;										
+PosTerminalNo@1100409000 : Code[10];										
+ProcessError@1100409002 : Boolean;										
+ErrorText@1100409001 : Text[1024];										
+LocalDistLocation@1100409003 : Record 99001512;										
+TsFloatingCashierError@1100409004 : Boolean;										
+BEGIN										
+//UpdateStaffStatus										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS Floating Cashier"" THEN BEGIN"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'UPDATE_STAFF_STATUS') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+IF Login THEN										
+PosTerminalNo := POS										
+ELSE										
+PosTerminalNo := '';										
+"WebServicesClient.UpdateStaffStatus('UPDATE_STAFF_STATUS',StaffID,PosTerminalNo,ProcessError,ErrorText);"										
+//EXIT(TRUE);  //LS7.1-03										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+Status.Table := DATABASE::Staff;										
+Status.Key1  := StaffID;										
+IF Login THEN										
+Status.Code1 := POS;										
+DCUTIL3.UpdateTSWorkTable(Status);										
+{  //LS7.1-03										
+"DCUTIL3.SendAndDisconnect(tmpError,TRUE);"										
+EXIT(TRUE);										
+}  //LS7.1-03										
+"IF NOT(DCUTIL3.SendAndDisconnect(tmpError,TRUE)) THEN ;  //LS7.1-03"										
+END;										
+END;										
+										
+//LS7.1-03-										
+TsFloatingCashierError := (tmpError <> 0) OR (ErrorText <> '');										
+CLEAR(tmpError);										
+CLEAR(ErrorText);										
+//LS7.1-03+										
+										
+"IF PosFuncProfile.""TS POS Cash Mgt."" THEN BEGIN"										
+"IF (Store.""Statement Method"" = Store.""Statement Method""::Staff) THEN BEGIN"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'UPDATE_STAFF_CASH_STATUS') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+IF Login THEN										
+PosTerminalNo := POS										
+ELSE										
+PosTerminalNo := '';										
+"WebServicesClient.UpdateStaffStatus('UPDATE_STAFF_CASH_STATUS',StaffID,PosTerminalNo,ProcessError,ErrorText);"										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+Status.Table := DATABASE::Staff;										
+Status.Key1  := StaffID;										
+IF Login THEN										
+Status.Code1 := POS;										
+DCUTIL3.UpdateTSWorkTableCashMgt(Status);										
+"//DCUTIL3.SendAndDisconnect(tmpError,TRUE);  //LS7.1-03"										
+"IF NOT(DCUTIL3.SendAndDisconnect(tmpError,TRUE)) THEN;  //LS7.1-03"										
+END;										
+END;										
+END;										
+										
+//LS7.1-03-										
+IF TsFloatingCashierError OR (tmpError <> 0) OR (ErrorText <> '') THEN										
+EXIT(FALSE)										
+ELSE										
+//LS7.1-03+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetStaffLoginStatus@15(StaffID@1000 : Code[20];VAR ErrorCode@1001 : Integer) : Code[10];										
+VAR										
+Status@1002 : Record 99001615;										
+ok@10012002 : Boolean;										
+RetryAction@10012001 : Record 99001615;										
+PosTerminalNo@1100409002 : Code[10];										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+LocalDistLocation@1100409003 : Record 99001512;										
+BEGIN										
+//GetStaffLoginStatus										
+IF NOT Initialize THEN										
+EXIT('');										
+										
+"IF PosFuncProfile.""TS Floating Cashier"" THEN BEGIN"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_STAFF_STATUS') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF WebServicesClient.GetStaffStatus('GET_STAFF_STATUS',StaffID,PosTerminalNo,ProcessError,ErrorText) THEN"										
+EXIT(PosTerminalNo);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF DCUTIL3.GetSpecTSWorkTable(Status,DATABASE::Staff,StaffID,'',ErrorCode) THEN"										
+EXIT(Status.Code1);										
+END;										
+END;										
+										
+"IF PosFuncProfile.""TS POS Cash Mgt."" THEN BEGIN"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_STAFF_CASH_STATUS') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF WebServicesClient.GetStaffStatus('GET_STAFF_CASH_STATUS',StaffID,PosTerminalNo,ProcessError,ErrorText) THEN"										
+EXIT(PosTerminalNo);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF DCUTIL3.GetSpecTSWorkTableCashMgt(Status,DATABASE::Staff,StaffID,'',ErrorCode) THEN"										
+EXIT(Status.Code1);										
+END;										
+END;										
+										
+EXIT('');										
+END;										
+										
+PROCEDURE GetPostedTransaction@16(ReceiptNo@1001 : Code[20];VAR ErrorCode@1002 : Integer) : Boolean;										
+VAR										
+TransNo@1003 : Integer;										
+StoreNo@1200070001 : Code[10];										
+PosNo@1200070002 : Code[10];										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetPostedTransaction										
+"EXIT(GetPostedTransactionEx(ReceiptNo, '', '', 0, ErrorCode));  //LS7.1-01"										
+END;										
+										
+PROCEDURE GetPostedTransactionEx@1100409038(ReceiptNo@1001 : Code[20];pStoreNo@1100409002 : Code[10];pTerminalNo@1100409003 : Code[1	0];	pTr	an	sNo	@1100409004 : Integer;VAR ErrorCode@1002 : Integer) : Boolean;					
+VAR										
+TransNo@1003 : Integer;										
+StoreNo@1200070001 : Code[10];										
+PosNo@1200070002 : Code[10];										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetPostedTransactionEx										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_TRANSACTION') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"//IF NOT WebServicesClient.GetPostedTransaction(ReceiptNo,ProcessError,ErrorText) THEN BEGIN  //LS7.1-01"										
+"IF NOT WebServicesClient.GetPostedTransactionEx(ReceiptNo, pStoreNo, pTerminalNo, pTransNo,ProcessError,ErrorText) THEN BEGIN //"	LS7	-0.1	1							
+IF ProcessError THEN BEGIN										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+//LS7.1-01-										
+IF ReceiptNo = '' THEN BEGIN										
+"EXIT(DCUTIL3.GetTransaction(pStoreNo,pTerminalNo,pTransNo,ErrorCode))"										
+END										
+ELSE BEGIN										
+//LS7.1-01+										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"//DCUTIL3.GetTransactionTransNo(ReceiptNo,StoreNo,PosNo,TransNo,ErrorCode);  //LS7.1-03"										
+//LS7.1-03-										
+"IF NOT(DCUTIL3.GetTransactionTransNo(ReceiptNo,StoreNo,PosNo,TransNo,ErrorCode)) THEN"										
+EXIT(FALSE);										
+//LS7.1-03+										
+IF TransNo = 0 THEN										
+EXIT(FALSE);										
+"EXIT(DCUTIL3.GetTransaction(StoreNo,PosNo,TransNo,ErrorCode))"										
+END;										
+END;										
+END;										
+										
+PROCEDURE GetCustomer@17(VAR Cust@1000 : Record 18;CustNo@1001 : Code[20];VAR ErrorCode@1002 : Integer) : Boolean;										
+VAR										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+LocalDistribLocation@1100409002 : Record 99001512;										
+BEGIN										
+//GetCustomer										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_CUSTOMER') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetCustomer(CustNo,Cust,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"ErrorText := STRSUBSTNO(Text001,'GET_CUSTOMER');"										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+END;										
+										
+PROCEDURE ReadStatementTransactions@1200070013(DoZ@1200070002 : Boolean;VAR ErrorCode@1100409000 : Integer) : Boolean;										
+VAR										
+SCode@1200070001 : Code[20];										
+BEGIN										
+//ReadStatementTransactions										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS Floating Cashier"" AND"										
+"(POSTerminal.""Statement Method"" = POSTerminal.""Statement Method""::Staff) AND"										
+"(POSTerminal.""Terminal Connection"" = POSTerminal.""Terminal Connection""::OffLine)"										
+THEN BEGIN										
+SCode := POSFunc.GetStatementCode;										
+										
+IF DoZ THEN										
+"ReplaceZReportIDWith(SCode,'','.');"										
+										
+IF NOT DoZ THEN										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_TRANS_HEADER_LIST') THEN BEGIN"										
+"IF NOT WebUpdatePOSAfterStatementCode(SCode,ErrorCode) THEN"										
+EXIT(FALSE)										
+END ELSE BEGIN										
+"IF NOT DCUTIL3.UpdatePOSAfterStatementCode(SCode,ErrorCode) THEN"										
+EXIT(FALSE);										
+END;										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_TRANS_HEADER_LIST') AND"										
+"POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_TRANS_STATEMENT_CODE')"										
+THEN BEGIN										
+"IF NOT WebGetTransByStatmentCode(SCode,ErrorCode) THEN BEGIN"										
+IF DoZ THEN										
+"ReplaceZReportIDWith(SCode,'.','');"										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.GetTransactionsByStatmentCode(SCode,ErrorCode) THEN BEGIN"										
+IF DoZ THEN										
+"ReplaceZReportIDWith(SCode,'.','');"										
+EXIT(FALSE);										
+END;										
+END;										
+END;										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE ReplaceZReportIDWith@1200070017(SCode@1200070010 : Code[20];Current@1200070011 : Code[10];New@1200070012 : Code[10]) : Boo	lea	n;								
+VAR										
+Transaction@1200070009 : Record 99001472;										
+Transaction2@1200070008 : Record 99001472;										
+PaymEntry@1200070007 : Record 99001474;										
+PaymEntry2@1200070006 : Record 99001474;										
+IncExpEntry@1200070005 : Record 99001475;										
+IncExpEntry2@1200070004 : Record 99001475;										
+TendDeclEntry@1200070003 : Record 99001465;										
+TendDeclEntry2@1200070002 : Record 99001465;										
+BEGIN										
+//ReplaceZReportIDWith										
+"Transaction.SETCURRENTKEY(""Statement Code"",""Z-Report ID"");"										
+"Transaction.SETRANGE(""Statement Code"",SCode);"										
+"Transaction.SETRANGE(""Z-Report ID"",Current);"										
+IF Transaction.FIND('-') THEN REPEAT										
+Transaction2 := Transaction;										
+"Transaction2.""Z-Report ID"" := New;"										
+Transaction2.MODIFY(TRUE);										
+UNTIL Transaction.NEXT = 0;										
+										
+"PaymEntry.SETCURRENTKEY(""Statement Code"",""Z-Report ID"");"										
+"PaymEntry.SETRANGE(""Statement Code"",SCode);"										
+"PaymEntry.SETRANGE(""Z-Report ID"",Current);"										
+IF PaymEntry.FIND('-') THEN REPEAT										
+PaymEntry2 := PaymEntry;										
+"PaymEntry2.""Z-Report ID"" := New;"										
+PaymEntry2.MODIFY(TRUE);										
+UNTIL PaymEntry.NEXT = 0;										
+										
+"TendDeclEntry.SETCURRENTKEY(""Statement Code"",""Z-Report ID"");"										
+"TendDeclEntry.SETRANGE(""Statement Code"",SCode);"										
+"TendDeclEntry.SETRANGE(""Z-Report ID"",Current);"										
+IF TendDeclEntry.FIND('-') THEN REPEAT										
+TendDeclEntry2 := TendDeclEntry;										
+"TendDeclEntry2.""Z-Report ID"" := New;"										
+TendDeclEntry2.MODIFY(TRUE);										
+UNTIL TendDeclEntry.NEXT=0;										
+										
+"IncExpEntry.SETCURRENTKEY(""Statement Code"",""Z-Report ID"");"										
+"IncExpEntry.SETRANGE(""Statement Code"",SCode);"										
+"IncExpEntry.SETRANGE(""Z-Report ID"",Current);"										
+IF IncExpEntry.FIND('-') THEN REPEAT										
+IncExpEntry2 := IncExpEntry;										
+"IncExpEntry2.""Z-Report ID"" := New;"										
+IncExpEntry2.MODIFY(TRUE);										
+UNTIL IncExpEntry.NEXT = 0;										
+END;										
+										
+PROCEDURE UpdateXZReportInformation@1200070016(DoZ@1200070003 : Boolean);										
+VAR										
+Transaction@1200070002 : Record 99001472;										
+ZReportID@1200070000 : Code[20];										
+Staff@1200070001 : Record 99001461;										
+BEGIN										
+//UpdateZReportInformation										
+IF NOT Initialize THEN										
+EXIT;										
+										
+"IF PosFuncProfile.""TS Floating Cashier"" AND"										
+"(POSTerminal.""Statement Method"" = POSTerminal.""Statement Method""::Staff) AND"										
+"(POSTerminal.""Terminal Connection"" = POSTerminal.""Terminal Connection""::OffLine) THEN BEGIN"										
+IF DoZ THEN BEGIN										
+ZReportID := Globals.GetValue('LAST_ZID');										
+"UpdateStatementTransactions(POSFunc.GetStatementCode,ZReportID);"										
+CleanupForeignXZTransactions(ZReportID);										
+END ELSE										
+CleanupForeignXZTransactions('');										
+END;										
+END;										
+										
+PROCEDURE CleanupForeignXZTransactions@1200070018(ZFilter@1200070000 : Code[20]);										
+VAR										
+Transaction@1200070005 : Record 99001472;										
+PaymEntry@1200070004 : Record 99001474;										
+IncExpEntry@1200070003 : Record 99001475;										
+TendDeclEntry@1200070001 : Record 99001465;										
+BEGIN										
+//RemoveForeignTransactions										
+"Transaction.SETCURRENTKEY(""Statement Code"",""Z-Report ID"");"										
+"Transaction.SETRANGE(""Statement Code"",POSFunc.GetStatementCode);"										
+"Transaction.SETRANGE(""Z-Report ID"",ZFilter);"										
+"Transaction.SETFILTER(""POS Terminal No."",'<>%1',Globals.TerminalNo);"										
+Transaction.DELETEALL;										
+										
+"PaymEntry.SETCURRENTKEY(""Statement Code"",""Z-Report ID"");"										
+"PaymEntry.SETRANGE(""Statement Code"",POSFunc.GetStatementCode);"										
+"PaymEntry.SETRANGE(""Z-Report ID"",ZFilter);"										
+"PaymEntry.SETFILTER(""POS Terminal No."",'<>%1',Globals.TerminalNo);"										
+PaymEntry.DELETEALL;										
+										
+"IncExpEntry.SETCURRENTKEY(""Statement Code"",""Z-Report ID"");"										
+"IncExpEntry.SETRANGE(""Statement Code"",POSFunc.GetStatementCode);"										
+"IncExpEntry.SETRANGE(""Z-Report ID"",ZFilter);"										
+"IncExpEntry.SETFILTER(""POS Terminal No."",'<>%1',Globals.TerminalNo);"										
+IncExpEntry.DELETEALL;										
+										
+"TendDeclEntry.SETCURRENTKEY(""Statement Code"",""Z-Report ID"");"										
+"TendDeclEntry.SETRANGE(""Statement Code"",POSFunc.GetStatementCode);"										
+"TendDeclEntry.SETRANGE(""Z-Report ID"",ZFilter);"										
+"TendDeclEntry.SETFILTER(""POS Terminal No."",'<>%1',Globals.TerminalNo);"										
+TendDeclEntry.DELETEALL;										
+END;										
+										
+PROCEDURE UpdateStatementTransactions@1200070014(SCode@1200070001 : Code[20];ZId@1200070002 : Code[20]) : Boolean;										
+VAR										
+Trans@1200070000 : Record 99001472;										
+Staff@1200070003 : Record 99001461;										
+BEGIN										
+//UpdateStatementTransactions										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS Floating Cashier"" AND"										
+"(POSTerminal.""Statement Method"" = POSTerminal.""Statement Method""::Staff) AND"										
+"(POSTerminal.""Terminal Connection"" = POSTerminal.""Terminal Connection""::OffLine)"										
+THEN BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+										
+Staff.GET(SCode);										
+IF UpdateStaff(Staff) THEN;										
+										
+globalTempTrans.DELETEALL;										
+"Trans.SETCURRENTKEY(""Statement Code"",""Z-Report ID"");"										
+"Trans.SETRANGE(""Statement Code"",SCode);"										
+"Trans.SETRANGE(""Z-Report ID"",ZId);"										
+IF Trans.FIND('-') THEN REPEAT										
+"globalTempTrans.""Store No."" := Trans.""Store No."";"										
+"globalTempTrans.""POS Terminal No."" := Trans.""POS Terminal No."";"										
+"globalTempTrans.""Transaction No."" := Trans.""Transaction No."";"										
+IF globalTempTrans.INSERT THEN;										
+UNTIL Trans.NEXT = 0;										
+										
+IF NOT SendWholeTmpTransaction() THEN BEGIN										
+"CreateTSRetryEntry(DATABASE::""Transaction Header"",SCode,ZId,"										
+"PosFuncProfile.""Floating Cashier"",TSAction::Update,1,TRUE,"										
+"'','',0,'');"										
+//LS7.1-07-										
+DCUTIL3.Disconnect;										
+POSGUI.ScreenDisplay('');										
+//LS7.1-07+										
+EXIT(FALSE);										
+END;										
+//LS7.1-07-										
+DCUTIL3.Disconnect;										
+POSGUI.ScreenDisplay('');										
+//LS7.1-07+										
+EXIT(TRUE);										
+END;										
+END;										
+										
+PROCEDURE ReadTerminalPOSTransactions@1200070002(TerminalNo@1200070000 : Code[20];VAR ErrorCode@1200070001 : Integer);										
+VAR										
+DistLoc@1200070003 : Record 99001512;										
+BEGIN										
+//ReadTerminalTransactions										
+IF NOT Initialize THEN										
+EXIT;										
+										
+IF NOT DistLoc.GET(TerminalNo) THEN										
+EXIT;										
+										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+{  //LS7.1-03										
+"DCUTIL3.GetMultiTablePOSTrans(0,DistLoc.Code,ErrorCode);"										
+"DCUTIL3.GetMultiTablePOSTrans(5,DistLoc.Code,ErrorCode);"										
+}  //LS7.1-03										
+//LS7.1-03-										
+"IF NOT(DCUTIL3.GetMultiTablePOSTrans(0,DistLoc.Code,ErrorCode)) THEN"										
+EXIT;										
+"IF NOT(DCUTIL3.GetMultiTablePOSTrans(5,DistLoc.Code,ErrorCode)) THEN;"										
+//LS7.1-03+										
+END;										
+										
+PROCEDURE SendTableTransaction@1200070005(PosTrans@1200070004 : Record 99008980;TableNo@1200070000 : Integer);										
+VAR										
+DistLoc@1200070003 : Code[10];										
+POSTerminal@1100409000 : Record 99001471;										
+DistributionLocation@1100409001 : Record 99001512;										
+BEGIN										
+//SendTableTransaction										
+IF NOT Initialize THEN										
+EXIT;										
+										
+"POSTerminal.GET(PosTrans.""POS Terminal No."");"										
+"IF POSTerminal.""Online Trans. Backup"" THEN BEGIN"										
+"IF DistributionLocation.GET(POSTerminal.""Backup Database"") THEN BEGIN"										
+"DistLoc := POSTerminal.""Backup Database"";"										
+END;										
+"END ELSE IF PosFuncProfile.""TS Online Trans. Backup"" THEN BEGIN"										
+"IF DistributionLocation.GET(PosFuncProfile.""Online Trans. Backup"") THEN"										
+"DistLoc := PosFuncProfile.""Online Trans. Backup"""										
+ELSE										
+EXIT;   // since we don't have a dist loc to send to we exit										
+END;										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+										
+IF DistLoc <> '' THEN										
+"IF NOT SendPOSTrans(PosTrans,DistLoc,'SEND_POSTRANS_BACKUP') THEN"										
+"CreateTSRetryEntry(DATABASE::""POS Transaction"",FORMAT(PosTrans.""Receipt No.""),'',DistLoc,"										
+"TSAction::Update,TableNo,TRUE,"										
+"'','',0,'SEND_POSTRANS_BACKUP');"										
+END;										
+										
+PROCEDURE DeleteTablePOSTrans@1200070006(PosTrans@1000 : Record 99008980;TableNo@1200070001 : Integer);										
+VAR										
+DistLoc@1200070002 : Code[10];										
+POSTerminal@1100409001 : Record 99001471;										
+DistributionLocation@1100409000 : Record 99001512;										
+ProcessError@1100409003 : Boolean;										
+ErrorText@1100409002 : Text[1024];										
+BEGIN										
+//DeleteTablePOSTrans										
+IF NOT Initialize THEN										
+EXIT;										
+										
+"POSTerminal.GET(PosTrans.""POS Terminal No."");"										
+"IF POSTerminal.""Online Trans. Backup"" THEN BEGIN"										
+"IF DistributionLocation.GET(POSTerminal.""Backup Database"") THEN BEGIN"										
+"DistLoc := POSTerminal.""Backup Database"";"										
+END;										
+"END ELSE IF PosFuncProfile.""TS Online Trans. Backup"" THEN BEGIN"										
+"IF DistributionLocation.GET(PosFuncProfile.""Online Trans. Backup"") THEN"										
+"DistLoc := PosFuncProfile.""Online Trans. Backup"""										
+ELSE										
+EXIT;   // since we don't have a dist loc to send to we exit										
+END;										
+										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+										
+IF DistLoc <> '' THEN										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'DELETE_POSTRANS_BACKUP') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.DeletePosTrans('DELETE_POSTRANS_BACKUP',PosTrans.""Receipt No."",ProcessError,ErrorText) THEN"										
+"CreateTSRetryEntry(DATABASE::""POS Transaction"",FORMAT(PosTrans.""Receipt No.""),'',DistLoc,TSAction::Delete,TableNo,TRUE,"										
+"'','',0,'DELETE_POSTRANS_BACKUP');"										
+END ELSE BEGIN										
+"IF NOT DCUTIL3.DeleteSpecPOSTrans(FORMAT(PosTrans.""Receipt No.""),DistLoc) THEN"										
+"CreateTSRetryEntry(DATABASE::""POS Transaction"",FORMAT(PosTrans.""Receipt No.""),'',DistLoc,TSAction::Delete,TableNo,TRUE,"										
+"'','',0,'');"										
+END;										
+END;										
+										
+PROCEDURE CreateTSRetryEntry@1200070007(TableNo@1000 : Integer;Key1@1001 : Text[250];Key2@1200070005 : Text[50];DistLoc@1200070004 :	Co	de[	50	];A	ction@1200070000 : Integer;Ext@1200070003 : Integer;Linked@1200070002 : Boolean;StoreNo@1100409000 : Code[10];POSTerminalNo@1100409001 : Code[10];TransactionNo@1100409002 : Integer;RequestID@1100409003 : Text[30]);					
+VAR										
+RetryEntry@1200070001 : Record 99001615;										
+BEGIN										
+//CreateTSRetryEntry										
+RetryEntry.Table := TableNo;										
+RetryEntry.Key1  := Key1;										
+RetryEntry.Key2  := Key2;										
+RetryEntry.Code1 := DistLoc;										
+RetryEntry.Int1 := Action;										
+RetryEntry.Int2 := Ext;										
+RetryEntry.Bool1 := Linked;										
+"RetryEntry.""Store No."" := StoreNo;"										
+"RetryEntry.""POS Terminal No."" := POSTerminalNo;"										
+"RetryEntry.""Transaction No."" := TransactionNo;"										
+"RetryEntry.""Web Request ID"" := RequestID;"										
+										
+IF NOT RetryEntry.INSERT THEN										
+RetryEntry.MODIFY;										
+END;										
+										
+PROCEDURE GetItemInventoryLookupTable@1200070009(ItemNo@1200070000 : Code[20];Variant@1200070001 : Code[20];StoreNo@1100409000 : Cod	e[1	0];	Lo	cat	ionProfile@1100409001 : Code[30];VAR ErrorCode@1200070003 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409003 : Boolean;										
+ErrorText@1100409002 : Text[1024];										
+BEGIN										
+//GetItemInventoryLookupTable										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_INVENTORY_LOOKUP') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"//IF NOT WebServicesClient.GetInventoryLookup(ItemNo,Variant,StoreNo,ProcessError,ErrorText) THEN BEGIN //LS7.1-05"										
+"IF NOT WebServicesClient.GetInventoryLookup(ItemNo,Variant,StoreNo,LocationProfile,ProcessError,ErrorText) THEN BEGIN //LS7.1-05"										
+IF ProcessError THEN BEGIN										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"ErrorText := STRSUBSTNO(Text001,'GET_INVENTORY_LOOKUP');"										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+END;										
+										
+PROCEDURE UpdateLookupTable@1200070008(ExtStoreNo@1200070005 : Code[20];ExtItemGrp@1200070006 : Code[20]);										
+VAR										
+Store@1200070000 : Record 99001470;										
+ItemGroup@1200070001 : Record 5723;										
+Item@1200070002 : Record 27;										
+ItemVariant@1200070003 : Record 5401;										
+LookUpEntry@1200070004 : Record 99001608;										
+ProcessStore@1100409000 : TextConst 'ENU=Processing Store #1####################\;ESP=Procesando Tienda #1####################\';										
+ProcessGroup@1100409001 : TextConst 'ENU=Processing Group #2####################\;ESP=Procesando Grupo #2####################\';										
+ProcessItem@1100409002 : TextConst 'ENU=Processing Item  #3####################\;ESP=Procesando Producto #3####################\';										
+Window@1100409003 : Dialog;										
+SerialLotItem@1100409004 : Boolean;										
+ItemLedgEntry@1100409007 : Record 32;										
+BEGIN										
+//UpdateLookupTable										
+IF GUIALLOWED THEN										
+Window.OPEN(										
+ProcessStore +										
+ProcessGroup +										
+ProcessItem);										
+										
+IF ExtStoreNo <> '' THEN										
+"Store.SETRANGE(""No."",ExtStoreNo)"										
+ELSE										
+"Store.SETRANGE(""POS Inventory Lookup"",TRUE);"										
+IF Store.FIND('-') THEN REPEAT										
+IF GUIALLOWED THEN										
+"Window.UPDATE(1,Store.""No."");"										
+										
+IF ExtItemGrp <> '' THEN										
+"ItemGroup.SETRANGE(Code,ExtItemGrp)"										
+ELSE										
+"ItemGroup.SETRANGE(""POS Inventory Lookup"",TRUE);"										
+										
+"ItemLedgEntry.SETCURRENTKEY(""Item No."",Open,""Variant Code"",Positive,"										
+"""Location Code"",""Posting Date"",""Expiration Date"",""Lot No."",""Serial No."");"										
+"ItemLedgEntry.SETRANGE(Positive,TRUE);"										
+"ItemLedgEntry.SETRANGE(""Location Code"",Store.""Location Code"");"										
+										
+IF ItemGroup.FIND('-') THEN REPEAT										
+IF GUIALLOWED THEN										
+"Window.UPDATE(2,ItemGroup.Code);"										
+										
+"Item.SETRANGE(""Product Group Code"",ItemGroup.Code);"										
+IF Item.FIND('-') THEN REPEAT										
+IF GUIALLOWED THEN										
+"Window.UPDATE(3,Item.""No."");"										
+"IF ItemTrack.IsItemSNTracking(Item.""No."") OR ItemTrack.IsItemLotTracking(Item.""No."") THEN"										
+SerialLotItem := TRUE										
+ELSE										
+SerialLotItem := FALSE;										
+										
+IF SerialLotItem THEN BEGIN										
+"ItemLedgEntry.SETRANGE(""Item No."",Item.""No."");"										
+"LookUpEntry.SETRANGE(""Item No."",Item.""No."");"										
+"LookUpEntry.SETRANGE(""Store No."",Store.""No."");"										
+IF LookUpEntry.ISEMPTY THEN										
+"ItemLedgEntry.SETRANGE(""Posting Date"")"										
+ELSE										
+"ItemLedgEntry.SETRANGE(""Posting Date"",CALCDATE('<-1M>',TODAY),TODAY);"										
+IF ItemLedgEntry.FIND('-') THEN										
+REPEAT										
+"IF NOT LookUpEntry.GET(Item.""No."",'',Store.""No."",ItemLedgEntry.""Lot No."",ItemLedgEntry.""Serial No."") THEN BEGIN"										
+"IF ItemGroup.""POS Inventory Lookup"" AND Store.""POS Inventory Lookup"" THEN BEGIN"										
+CLEAR(LookUpEntry);										
+"LookUpEntry.""Item No."" := Item.""No."";"										
+"//LookUpEntry.""Store No."" := Store.""No.""; LS7.1-05"										
+"LookUpEntry.VALIDATE(""Store No."",Store.""No.""); //LS7.1-05"										
+"LookUpEntry.Location := Store.""Location Code"";"										
+"LookUpEntry.""Lot No."" := ItemLedgEntry.""Lot No."";"										
+"LookUpEntry.""Serial No."" := ItemLedgEntry.""Serial No."";"										
+"LookUpEntry.""Expiration Date"" := ItemLedgEntry.""Expiration Date"";"										
+LookUpEntry.INSERT;										
+END										
+END ELSE										
+"IF NOT Store.""POS Inventory Lookup"" OR NOT ItemGroup.""POS Inventory Lookup"" THEN"										
+LookUpEntry.DELETE;										
+UNTIL ItemLedgEntry.NEXT = 0;										
+END ELSE BEGIN										
+"IF NOT LookUpEntry.GET(Item.""No."",'',Store.""No."",'','') THEN BEGIN"										
+"IF ItemGroup.""POS Inventory Lookup"" AND Store.""POS Inventory Lookup"" THEN BEGIN"										
+CLEAR(LookUpEntry);										
+"LookUpEntry.""Item No."" := Item.""No."";"										
+"//LookUpEntry.""Store No."" := Store.""No.""; LS7.1-05"										
+"LookUpEntry.VALIDATE(""Store No."",Store.""No.""); //LS7.1-05"										
+"LookUpEntry.Location := Store.""Location Code"";"										
+LookUpEntry.INSERT;										
+END										
+END ELSE										
+"IF NOT Store.""POS Inventory Lookup"" OR NOT ItemGroup.""POS Inventory Lookup"" THEN"										
+LookUpEntry.DELETE;										
+END;										
+										
+"ItemVariant.SETRANGE(""Item No."",Item.""No."");"										
+IF ItemVariant.FIND('-') THEN REPEAT										
+IF SerialLotItem THEN BEGIN										
+"ItemLedgEntry.SETRANGE(""Item No."",Item.""No."");"										
+"ItemLedgEntry.SETRANGE(""Variant Code"",ItemVariant.Code);"										
+"LookUpEntry.SETRANGE(""Item No."",Item.""No."");"										
+"LookUpEntry.SETRANGE(""Variant Code"",ItemVariant.Code);"										
+"LookUpEntry.SETRANGE(""Store No."",Store.""No."");"										
+IF LookUpEntry.ISEMPTY THEN										
+"ItemLedgEntry.SETRANGE(""Posting Date"")"										
+ELSE										
+"ItemLedgEntry.SETRANGE(""Posting Date"",CALCDATE('<-1M>',TODAY),TODAY);"										
+IF ItemLedgEntry.FIND('-') THEN										
+REPEAT										
+"IF NOT LookUpEntry.GET(Item.""No."",ItemVariant.Code,Store.""No."","										
+"ItemLedgEntry.""Lot No."",ItemLedgEntry.""Serial No."")"										
+THEN BEGIN										
+"IF ItemGroup.""POS Inventory Lookup"" AND Store.""POS Inventory Lookup"" THEN BEGIN"										
+CLEAR(LookUpEntry);										
+"LookUpEntry.""Item No."" := Item.""No."";"										
+"//LookUpEntry.""Store No."" := Store.""No.""; LS7.1-05"										
+"LookUpEntry.VALIDATE(""Store No."",Store.""No.""); //LS7.1-05"										
+"LookUpEntry.Location := Store.""Location Code"";"										
+"LookUpEntry.""Variant Code"" := ItemVariant.Code;"										
+"LookUpEntry.""Lot No."" := ItemLedgEntry.""Lot No."";"										
+"LookUpEntry.""Serial No."" := ItemLedgEntry.""Serial No."";"										
+"LookUpEntry.""Expiration Date"" := ItemLedgEntry.""Expiration Date"";"										
+LookUpEntry.INSERT;										
+END										
+END ELSE										
+"IF NOT Store.""POS Inventory Lookup"" OR NOT ItemGroup.""POS Inventory Lookup"" THEN"										
+LookUpEntry.DELETE;										
+UNTIL ItemLedgEntry.NEXT = 0;										
+END ELSE BEGIN										
+"IF NOT LookUpEntry.GET(Item.""No."",ItemVariant.Code,Store.""No."",'','') THEN BEGIN"										
+"IF ItemGroup.""POS Inventory Lookup"" AND Store.""POS Inventory Lookup"" THEN BEGIN"										
+CLEAR(LookUpEntry);										
+"LookUpEntry.""Item No."" := Item.""No."";"										
+"//LookUpEntry.""Store No."" := Store.""No.""; LS7.1-05"										
+"LookUpEntry.VALIDATE(""Store No."",Store.""No.""); //LS7.1-05"										
+"LookUpEntry.Location := Store.""Location Code"";"										
+"LookUpEntry.""Variant Code"" := ItemVariant.Code;"										
+LookUpEntry.INSERT;										
+END;										
+END ELSE										
+"IF NOT Store.""POS Inventory Lookup"" OR NOT ItemGroup.""POS Inventory Lookup"" THEN"										
+LookUpEntry.DELETE;										
+END;										
+UNTIL ItemVariant.NEXT = 0;										
+UNTIL Item.NEXT = 0;										
+UNTIL ItemGroup.NEXT = 0;										
+UNTIL Store.NEXT = 0;										
+										
+IF GUIALLOWED THEN										
+Window.CLOSE;										
+END;										
+										
+PROCEDURE GetTimeReg@1200070019(StaffID@1001 : Code[20];VAR ErrorCode@1002 : Integer) : Boolean;										
+VAR										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetTimeReg										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_TIME_REG_ENTRY') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetTimeRegEntry(StaffID,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"EXIT(DCUTIL3.GetTimeReg(StaffID,ErrorCode));"										
+END;										
+END;										
+										
+PROCEDURE UpdateTimeReg@1200070023(VAR TimeRegEntry@1200070000 : Record 99001547) : Boolean;										
+VAR										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//UpdateTimeReg										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_TIME_REG_ENTRY') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.SendTimeRegEntry(TimeRegEntry,ProcessError,ErrorText) THEN"										
+EXIT(FALSE);										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+EXIT(DCUTIL3.UpdateTimeReg(TimeRegEntry));										
+END;										
+END;										
+										
+PROCEDURE GetContact@1200070022(pContactNo@1200070002 : Code[20];VAR pContact@1200070001 : Record 5050;VAR pErrorCode@1200070000 : I	nte	ger	)	: B	oolean;					
+VAR										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetContact										
+CLEAR(pErrorCode);										
+										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_CONTACT') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetContact(pContactNo,pContact,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+pErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.GetContact(pContactNo,pContact,pErrorCode) THEN"										
+EXIT(FALSE)										
+ELSE										
+EXIT(TRUE);										
+END;										
+END;										
+										
+PROCEDURE GetMSRCard@1200070024(pCardNo@1200070002 : Text[100];VAR pMSRCard@1200070001 : Record 10000729;VAR pErrorCode@1200070000 :	In	teg	er	) :	Boolean;					
+VAR										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetMRSCard										
+CLEAR(pErrorCode);										
+										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_MSR_CARD') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetMSRCard(pCardNo,pMSRCard,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+pErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.GetMSRCard(pCardNo,pMSRCard,pErrorCode) THEN"										
+EXIT(FALSE)										
+ELSE										
+EXIT(TRUE);										
+END;										
+END;										
+										
+PROCEDURE GetContactBusRelation@1200070025(pContactNo@1200070002 : Code[20];VAR pContactBusRelationTmp@1200070001 : Record 5054;VAR	pEr	ror	Co	de@	1200070000 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetContactBusRelation										
+CLEAR(pErrorCode);										
+										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_CONTACT_BUS_RELATION') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetContactBusRelation(pContactNo,pContactBusRelationTmp,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+pErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.GetContactBusRelation(pContactNo,pContactBusRelationTmp,pErrorCode) THEN"										
+EXIT(FALSE)										
+ELSE										
+EXIT(TRUE);										
+END;										
+END;										
+										
+PROCEDURE MarkCustomerForUpdate@1200070030(VAR pCustomer@1200070000 : Record 18);										
+BEGIN										
+//MarkCustomerForUpdate										
+IF NOT Initialize THEN										
+EXIT;										
+										
+"IF PosFuncProfile.""TS Member"" OR PosFuncProfile.""DD Member"" THEN"										
+"CreateTSRetryEntry(DATABASE::Customer,pCustomer.""No."",'',"										
+"PosFuncProfile.Member,TSAction::Update,0,FALSE,'','',0,'');"										
+END;										
+										
+PROCEDURE MarkContactForUpdate@1200070028(VAR pContact@1200070000 : Record 5050);										
+BEGIN										
+//MarkContactForUpdate										
+IF NOT Initialize THEN										
+EXIT;										
+										
+"IF PosFuncProfile.""TS Member"" OR PosFuncProfile.""DD Member"" THEN"										
+"CreateTSRetryEntry(DATABASE::Contact,pContact.""No."",'',"										
+"PosFuncProfile.Member,TSAction::Update,0,FALSE,'','',0,'');"										
+END;										
+										
+PROCEDURE MarkContactBusRelForUpdate@1200070032(VAR pContactBusRelation@1200070001 : Record 5054);										
+BEGIN										
+//MarkContactBusRelForUpdate										
+IF NOT Initialize THEN										
+EXIT;										
+										
+"IF PosFuncProfile.""TS Member"" OR PosFuncProfile.""DD Member"" THEN"										
+"CreateTSRetryEntry(DATABASE::""Contact Business Relation"","										
+"pContactBusRelation.""Contact No."",pContactBusRelation.""Business Relation Code"","										
+"PosFuncProfile.Member,TSAction::Update,0,FALSE,'','',0,'');"										
+END;										
+										
+PROCEDURE MarkMSRCardForUpdate@1200070036(VAR pMSRCard@1200070001 : Record 10000729);										
+BEGIN										
+//MarkMSRCardForUpdate										
+IF NOT Initialize THEN										
+EXIT;										
+										
+"IF PosFuncProfile.""TS Member"" OR PosFuncProfile.""DD Member"" THEN"										
+"CreateTSRetryEntry(DATABASE::""MSR Card Link Setup"",pMSRCard.""Card Number"",'',"										
+"PosFuncProfile.Member,TSAction::Update,0,FALSE,'','',0,'');"										
+END;										
+										
+PROCEDURE MarkWorkShiftEntryForUpdate@10012002(VAR WorkShiftEntry@10012000 : Record 99001508);										
+BEGIN										
+"// MarkWorkShiftEntryForUpdate(WorkShiftEntry : Record ""Work Shift Entry"")"										
+IF NOT Initialize THEN										
+EXIT;										
+										
+"IF PosFuncProfile.""TS Send Transactions"" OR PosFuncProfile.""DD Send Transaction"" THEN BEGIN"										
+CreateTSRetryEntry(										
+"DATABASE::""Work Shift Entry"",FORMAT(WorkShiftEntry.""Shift Date""),"										
+"WorkShiftEntry.""Shift No."",WorkShiftEntry.""Statement Code"",TSAction::Update,"										
+"0,FALSE,WorkShiftEntry.""Store No."",'',0,'');"										
+CreateTSRetryEntry(										
+"DATABASE::""Work Shift RBO"",FORMAT(WorkShiftEntry.""Shift Date""),"										
+"WorkShiftEntry.""Shift No."",'',TSAction::Update,"										
+"0,FALSE,WorkShiftEntry.""Store No."",'',0,'');"										
+END;										
+END;										
+										
+PROCEDURE GetPosStartStatus@1100409016(PosStartStat@1100409001 : Record 99001627;VAR ErrorCode@1100409000 : Integer) : Boolean;										
+VAR										
+RetryAction@1100409007 : Record 99001615;										
+PosStartStat2@1100409006 : Record 99001627;										
+ok@1100409005 : Boolean;										
+stop@1100409003 : Boolean;										
+ProcessError@1100409008 : Boolean;										
+ErrorText@1100409002 : Text[1024];										
+BEGIN										
+//GetPosStartStatus										
+ErrorCode := 0;										
+										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS POS Cash Mgt."" THEN BEGIN"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_POS_START_STATUS') AND"										
+"POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_POS_START_STATUS')"										
+THEN BEGIN										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+ok := FALSE;										
+stop := FALSE;										
+CLEAR(RetryAction);										
+"RetryAction.SETRANGE(Table,DATABASE::""POS Start Status"");"										
+IF RetryAction.FINDFIRST THEN BEGIN										
+REPEAT										
+CLEAR(PosStartStat2);										
+"PosStartStat2.""Store No."" := BOUtil.SeparateTableKey(1,RetryAction.Key1);"										
+"IF EVALUATE(PosStartStat2.Type,BOUtil.SeparateTableKey(2,RetryAction.Key1)) THEN ;"										
+"PosStartStat2.ID := BOUtil.SeparateTableKey(3,RetryAction.Key1);"										
+IF PosStartStat2.FIND THEN BEGIN										
+"ok := WebServicesClient.SendPosStartStatus(PosStartStat2,ProcessError,ErrorText);"										
+stop := NOT ok;										
+END;										
+UNTIL stop OR (RetryAction.NEXT = 0);										
+IF ok THEN										
+EXIT(TRUE);										
+END;										
+"IF NOT WebServicesClient.GetPosStartStatus(PosStartStat,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"ErrorText := STRSUBSTNO(Text001,'GET_POS_START_STATUS/SEND_POS_START_STATUS');"										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+END;										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE UpdatePosStartStatus@1100409017(PosStartStat@1100409001 : Record 99001627;VAR ErrorCode@1100409002 : Integer) : Boolean;										
+VAR										
+Ret@10012000 : Boolean;										
+ProcessError@1100409004 : Boolean;										
+ErrorText@1100409003 : Text[1024];										
+BEGIN										
+//UpdatePosStartStatus										
+Ret := TRUE;										
+										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS POS Cash Mgt."" THEN BEGIN"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_POS_START_STATUS') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.SendPosStartStatus(PosStartStat,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+Ret := FALSE;										
+END;										
+Ret := TRUE;										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+{  //LS7.1-03										
+"DCUTIL3.StartUpdateRequest(PosFuncProfile.""POS Cash Mgt."",TRUE,'');"										
+DCUTIL3.UpdatePosStartStatus(PosStartStat);										
+}  //LS7.1-03										
+//LS7.1-03-										
+"IF NOT(DCUTIL3.StartUpdateRequest(PosFuncProfile.""POS Cash Mgt."",TRUE,'')) THEN"										
+Ret := FALSE;										
+IF Ret THEN BEGIN										
+Ret := DCUTIL3.UpdatePosStartStatus(PosStartStat);										
+IF Ret THEN BEGIN										
+//LS7.1-03+										
+"Ret := DCUTIL3.SendAndDisconnect(ErrorCode,TRUE);"										
+END;  //LS7.1-03										
+END;  //LS7.1-03										
+END;										
+END;										
+										
+IF NOT Ret THEN										
+"CreateTSRetryEntry(DATABASE::""POS Start Status"","										
+"BOUtil.CombineTableKey(3,PosStartStat.""Store No."",BOUtil.OptToStr(PosStartStat.Type),PosStartStat.ID,'',''),'',"										
+"PosFuncProfile.""POS Cash Mgt."",TSAction::Update,0,FALSE,"										
+"PosStartStat.""Store No."",PosStartStat.""POS Terminal No."",0,'');"										
+										
+EXIT(Ret);										
+END;										
+										
+PROCEDURE GetPosStartStatAndCalc@1100409007(VAR PosStartStat@1100409001 : Record 99001627;VAR ErrorCode@1100409000 : Integer) : Bool	ean	;								
+VAR										
+ProcessError@1100409004 : Boolean;										
+ErrorText@1100409003 : Text[1024];										
+PosStartStatTemp@1100409005 : TEMPORARY Record 99001627;										
+BEGIN										
+//GetPosStartStatAndCalc										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS POS Cash Mgt."" THEN BEGIN"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_POS_START_STATUS') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+PosStartStatTemp.RESET;										
+PosStartStatTemp.DELETEALL;										
+PosStartStatTemp.COPY(PosStartStat);										
+"IF NOT WebServicesClient.GetPosStartStatusTemp(PosStartStatTemp,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+PosStartStat := PosStartStatTemp;										
+EXIT(TRUE);										
+END ELSE BEGIN										
+"ErrorText := STRSUBSTNO(Text001,'GET_POS_START_STATUS');"										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+END;										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE CreateTmpTotalPayment@1100409021(PosTrans@1100409000 : Record 99008980;Type@10012000 : Integer) : Boolean;										
+BEGIN										
+//CreateTmpTotalPayment										
+"EXIT(DCUTIL3.CreateTmpTotalPayment(PosTrans,Type));"										
+END;										
+										
+PROCEDURE GetTotalPayment@1100409022(PosStartStat@1100409000 : Record 99001627;VAR ErrorCode@1100409002 : Integer) : Boolean;										
+VAR										
+ErrorText@1100409001 : Text[1024];										
+BEGIN										
+//GetTotalPayment										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS POS Cash Mgt."" THEN BEGIN"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_POS_START_STATUS') THEN BEGIN"										
+"EXIT(DCUTIL3.WebGetTotalPayment(PosStartStat,ErrorCode))"										
+END ELSE BEGIN										
+ErrorCode := 9999;										
+"ErrorText := STRSUBSTNO(Text001,'GET_POS_START_STATUS');"										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+END;										
+										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE FirstTmpTotalPayment@1100409023(VAR PosCashDecl@1100409000 : Record 99001624) : Boolean;										
+BEGIN										
+//FirstTmpTotalPayment										
+EXIT(DCUTIL3.FirstTmpTotalPayment(PosCashDecl));										
+END;										
+										
+PROCEDURE NextTmpTotalPayment@1100409024(VAR PosCashDecl@1100409000 : Record 99001624) : Boolean;										
+BEGIN										
+//NextTmpTotalPayment										
+EXIT(DCUTIL3.NextTmpTotalPayment(PosCashDecl));										
+END;										
+										
+PROCEDURE SendUnsendPosStartStatus@10012001();										
+VAR										
+ok@10012002 : Boolean;										
+RetryAction@10012000 : Record 99001615;										
+DCUtil1@1100409000 : Codeunit 99008920;										
+BEGIN										
+//SendUnsendPosStartStatus										
+ok := TRUE;										
+"RetryAction.SETRANGE(Int1,TSAction::Update);"										
+"RetryAction.SETRANGE(Table,DATABASE::""POS Start Status"");"										
+IF RetryAction.FINDFIRST THEN BEGIN										
+"DCUtil1.Initialize(PosFuncProfile.""Profile ID"");"										
+REPEAT										
+"ok := UpdUnsendPosStartStatusDD3(DCUtil1,RetryAction);"										
+UNTIL NOT ok OR (RetryAction.NEXT = 0);										
+DCUtil1.Disconnect();										
+END;										
+END;										
+										
+PROCEDURE TSInUse@1100409015(VAR pPosFuncProfile@1100409000 : Record 99001515) : Boolean;										
+BEGIN										
+//TSInUse										
+WITH pPosFuncProfile DO BEGIN										
+"IF ""TS Send Transactions"" OR ""TS Void Transactions"" OR ""TS Susp./Retrieve"" OR ""TS Staff"" OR"										
+"""TS Customer"" OR ""TS Data Entries"" OR ""TS Floating Cashier"" OR"										
+"""DD Send Transaction"" OR ""DD Data Entry"" OR ""DD Void Transactions"" OR ""DD Member"" OR"										
+"""TS Inv. Lookup"" OR ""TS Customer Invoice"""										
+THEN										
+EXIT(TRUE);										
+END;										
+										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE GetCustSpecInvoice@1100409002(InvoiceNo@1100409001 : Code[20];VAR CustLedgEntry@1100409003 : TEMPORARY Record 21;VAR TsErr	or@	110	4	90	00 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409004 : Boolean;										
+ErrorText@1100409002 : Text[1024];										
+BEGIN										
+//GetCustSpecInvoice										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_CUSTOMER_INVOICES') AND"										
+(InvoiceNo <> '')										
+THEN BEGIN										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetCustomerInvoice(InvoiceNo,'',0,CustLedgEntry,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+TsError := 9999;										
+"ErrorText := STRSUBSTNO(Text001,'GET_CUSTOMER_INVOICES');"										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetCustOpenInvoices@1100409004(CustomerNo@1100409001 : Code[20];VAR CustLedgEntry@1100409003 : TEMPORARY Record 21;VAR TsE	rro	r@1	10	40	9000 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409004 : Boolean;										
+ErrorText@1100409002 : Text[1024];										
+BEGIN										
+//GetCustOpenInvoices										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_CUSTOMER_INVOICES') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetCustomerInvoice('',CustomerNo,1,CustLedgEntry,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+TsError := 9999;										
+"ErrorText := STRSUBSTNO(Text001,'GET_CUSTOMER_INVOICES');"										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetSalesHeader@1100409003(OrderNo@1100409003 : Code[20];VAR SalesHeader@1100409001 : TEMPORARY Record 36;VAR TsError@11004	90	2	:	Int	eger) : Boolean;					
+VAR										
+ProcessError@1100409004 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetSalesHeader										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_SALES_HEADER') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetSalesHeader(OrderNo,SalesHeader,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END										
+ELSE BEGIN										
+TsError := 9999;										
+"ErrorText := STRSUBSTNO(Text001,'GET_SALES_HEADER');"										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetSalesLine@1100409008(OrderNo@1100409003 : Code[20];VAR SalesLine@1100409001 : TEMPORARY Record 37;VAR TsError@110040900	2:00	In	te	ger	) : Boolean;					
+VAR										
+ProcessError@1100409004 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetSalesLine										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_SALES_LINE') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetSalesLine(OrderNo,SalesLine,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"IF PosFuncProfile.""TS Sales Document"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.GetSalesLine(OrderNo,SalesLine,TsError) THEN"										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetResEntries@1100409012(OrderNo@1100409003 : Code[20];VAR ResEntry@1100409001 : TEMPORARY Record 337;VAR TsError@11004090	2	: I	nt	ege	r) : Boolean;					
+VAR										
+ResEntryTemp@1100409000 : TEMPORARY Record 337;										
+ProcessError@1100409005 : Boolean;										
+ErrorText@1100409004 : Text[1024];										
+BEGIN										
+//GetResEntry										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_RESERVATION_ENTRY') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetResEntry(OrderNo,ResEntry,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"IF PosFuncProfile.""TS Sales Document"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+ResEntryTemp.RESET;										
+ResEntryTemp.DELETEALL;										
+"IF NOT DCUTIL3.GetResEntries1(OrderNo,ResEntryTemp,TsError) THEN"										
+EXIT(FALSE);										
+"IF NOT DCUTIL3.GetResEntries2(OrderNo,ResEntryTemp,ResEntry,TsError) THEN"										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetPaymentHistory@1100409005(OrderNo@1100409000 : Code[20];VAR TransPaymentEntry@1100409002 : TEMPORARY Record 99001474;VA	R T	sEr	ro	r@1	100409001 : Integer) : Boolean;					
+VAR										
+StepOk@1100409003 : Boolean;										
+TSDistLocation@1100409004 : Code[10];										
+TenderType@1100409012 : Record 99001462;										
+PaymentLinesTemp@1100409005 : TEMPORARY Record 10012727;										
+AllPaymentEntry@1100409006 : TEMPORARY Record 99001474;										
+SpoPrePayment@1100409007 : Decimal;										
+TotalPayment@1100409008 : Decimal;										
+NoneSpoPayment@1100409009 : Decimal;										
+FirstTransPaymentEntry@1100409010 : TEMPORARY Record 99001474;										
+lText001@1100409011 : TextConst 'ENU=None Spo payment;ESP=Ning£n pago Ped.Esp.';										
+FirstDateTime@1100409013 : DateTime;										
+CurrDateTime@1100409014 : DateTime;										
+ProcessError@1100409016 : Boolean;										
+ErrorText@1100409015 : Text[1024];										
+BEGIN										
+//GetPaymentHistory										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS Customer Invoice"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+										
+"TenderType.SETRANGE(""Store No."",Globals.StoreNo);"										
+"TenderType.SETRANGE(TenderType.""Auto Account Payment Tender"",TRUE);"										
+"TenderType.SETRANGE(""Function"",TenderType.""Function""::Customer);"										
+TenderType.FINDFIRST;										
+										
+StepOk := TRUE;										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_SPO_PAYMENTS') AND"										
+"POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_TRANS_PAYMENTS')"										
+THEN BEGIN										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetTransPayments(OrderNo,AllPaymentEntry,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+"IF NOT WebServicesClient.GetSpoPayments(OrderNo,PaymentLinesTemp,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"TSDistLocation := PosFuncProfile.""Customer Invoice"";"										
+"IF NOT DCUTIL3.GetTransPaymentEntry(TSDistLocation,OrderNo,Globals.StoreNo,AllPaymentEntry,TsError) THEN"										
+"IF (PosFuncProfile.""Customer Invoice 2"" <> '') THEN BEGIN"										
+"TSDistLocation := PosFuncProfile.""Customer Invoice 2"";"										
+"IF NOT DCUTIL3.GetTransPaymentEntry(TSDistLocation,OrderNo,Globals.StoreNo,AllPaymentEntry,TsError) THEN"										
+StepOk := FALSE;										
+END ELSE										
+StepOk := FALSE;										
+IF NOT StepOk THEN										
+EXIT(StepOk);										
+										
+"IF NOT DCUTIL3.GetPaymentLineEntry(TSDistLocation,OrderNo,PaymentLinesTemp,TsError) THEN"										
+StepOk := FALSE;										
+IF NOT StepOk THEN										
+EXIT(StepOk);										
+END;										
+										
+SpoPrePayment := 0;										
+TotalPayment := 0;										
+AllPaymentEntry.RESET;										
+IF AllPaymentEntry.FIND('-') THEN BEGIN										
+FirstTransPaymentEntry := AllPaymentEntry;										
+"FirstDateTime := CREATEDATETIME(AllPaymentEntry.Date,AllPaymentEntry.Time);"										
+REPEAT										
+"CurrDateTime := CREATEDATETIME(AllPaymentEntry.Date,AllPaymentEntry.Time);"										
+IF CurrDateTime < FirstDateTime THEN BEGIN										
+FirstDateTime := CurrDateTime;										
+FirstTransPaymentEntry := AllPaymentEntry;										
+END;										
+"IF AllPaymentEntry.""Tender Type"" = TenderType.Code THEN"										
+"SpoPrePayment := SpoPrePayment + AllPaymentEntry.""Amount Tendered"""										
+ELSE BEGIN										
+"TotalPayment := TotalPayment + AllPaymentEntry.""Amount Tendered"";"										
+TransPaymentEntry.INIT;										
+TransPaymentEntry := AllPaymentEntry;										
+"TransPaymentEntry.""Card or Account"" := COPYSTR(TenderType.Description,1,30);"										
+TransPaymentEntry.INSERT;										
+END;										
+UNTIL AllPaymentEntry.NEXT = 0;										
+END;										
+										
+NoneSpoPayment := TotalPayment + SpoPrePayment;										
+IF NoneSpoPayment <> 0 THEN BEGIN										
+TransPaymentEntry.INIT;										
+"TransPaymentEntry.""Store No."" := FirstTransPaymentEntry.""Store No."";"										
+"TransPaymentEntry.""POS Terminal No."" := FirstTransPaymentEntry.""POS Terminal No."";"										
+"TransPaymentEntry.""Transaction No."" := FirstTransPaymentEntry.""Transaction No."";"										
+"TransPaymentEntry.""Line No."" := 1;"										
+"TransPaymentEntry.""Receipt No."" := FirstTransPaymentEntry.""Receipt No."";"										
+TransPaymentEntry.Date := FirstTransPaymentEntry.Date;										
+TransPaymentEntry.Time := FirstTransPaymentEntry.Time;										
+"TransPaymentEntry.""Order No."" := FirstTransPaymentEntry.""Order No."";"										
+"TransPaymentEntry.""Amount Tendered"" := -NoneSpoPayment;"										
+"TransPaymentEntry.""Card or Account"" := lText001;"										
+TransPaymentEntry.INSERT;										
+END;										
+										
+PaymentLinesTemp.RESET;										
+IF PaymentLinesTemp.FINDSET THEN										
+REPEAT										
+TransPaymentEntry.INIT;										
+"TransPaymentEntry.""Store No."" := Globals.StoreNo;"										
+"TransPaymentEntry.""POS Terminal No."" := COPYSTR(FORMAT(PaymentLinesTemp.Origin,0,'<Text>'),1,"										
+"MAXSTRLEN(TransPaymentEntry.""POS Terminal No.""));"										
+"TransPaymentEntry.""Transaction No."" := PaymentLinesTemp.""Line No."";"										
+"TransPaymentEntry.""Line No."" := PaymentLinesTemp.""Document Line No."";"										
+"TransPaymentEntry.""Receipt No."" := PaymentLinesTemp.""Receipt No."";"										
+"TransPaymentEntry.""Order No."" := PaymentLinesTemp.""Document No."";"										
+"TransPaymentEntry.Date := PaymentLinesTemp.""Date Created"";"										
+"TransPaymentEntry.Time := PaymentLinesTemp.""Time Created"";"										
+"TransPaymentEntry.""Amount Tendered"" := PaymentLinesTemp.Amount;"										
+"TransPaymentEntry.""Card or Account"" := FORMAT(PaymentLinesTemp.Origin,0,'<Text>');"										
+TransPaymentEntry.INSERT;										
+UNTIL PaymentLinesTemp.NEXT = 0;										
+										
+EXIT(StepOk);										
+END;										
+										
+PROCEDURE GetOpenSpecOrderPrePay@1100409006(pOrderNo@1100409004 : Code[20];VAR pSalesInvHeader@1100409002 : TEMPORARY Record 112;VAR	pT	sEr	ro	r@1	100409000 : Integer) : Boolean;					
+BEGIN										
+//GetOpenSpecOrderPrePay										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS Customer Invoice"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+										
+"IF NOT DCUTIL3.GetOpenSpecOrderPrePay(PosFuncProfile.""Customer Invoice"",pOrderNo,pSalesInvHeader,pTsError) THEN"										
+"IF (PosFuncProfile.""Customer Invoice 2"" <> '') THEN BEGIN"										
+"IF NOT DCUTIL3.GetOpenSpecOrderPrePay(PosFuncProfile.""Customer Invoice 2"",pOrderNo,pSalesInvHeader,pTsError) THEN"										
+EXIT(FALSE);										
+END ELSE										
+EXIT(FALSE);										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetSalesHeaderExt@1100409010(ContactNo@1100409003 : Code[20];CustomerNo@1100409000 : Code[20];VAR SalesHeader@1100409001 :	TE	MPO	RA	RY	Record 36;VAR FlowFieldBuffer@1100409004 : TEMPORARY Record 99001649;VAR TsError@1100409002 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409006 : Boolean;										
+ErrorText@1100409005 : Text[1024];										
+BEGIN										
+//GetSalesHeaderExt										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_SALES_HEADER_LIST') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetSalesHeaderList(ContactNo,CustomerNo,SalesHeader,FlowFieldBuffer,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+TsError := 0;										
+END ELSE BEGIN										
+TsError := 9999;										
+"ErrorText := STRSUBSTNO(Text001,'GET_SALES_HEADER_LIST');"										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetTransHeaderExt@1100409011(ContactNo@1100409000 : Code[20];CustomerNo@1100409001 : Code[20];OrderNo@1100409002 : Code[20	];V	AR	Tr	ans	Header@1100409004 : TEMPORARY Record 99001472;VAR TsError@1100409003 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409006 : Boolean;										
+ErrorText@1100409005 : Text[1024];										
+BEGIN										
+//GetTransHeaderExt										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_SPO_TRANS_HEADER') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetSpoTransHeader(ContactNo,CustomerNo,OrderNo,TransHeader,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"IF PosFuncProfile.""TS Sales Document"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.GetTransHeaderExt(ContactNo,CustomerNo,OrderNo,TransHeader,TsError) THEN"										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetSalesInvoice@1100409013(OrderNo@1100409003 : Code[20];VAR SalesInvoiceHeader@1100409000 : TEMPORARY Record 112;VAR TsEr	ror	@11	0	409	002 : Integer) : Boolean;					
+VAR										
+FlowFieldBuffer@1100409005 : TEMPORARY Record 99001649;										
+ProcessError@1100409004 : Boolean;										
+ErrorText@1100409001 : Text[1024];										
+BEGIN										
+//GetSalesInvoice										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_SALES_INVOICE_LIST') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetSalesInvoice('','',OrderNo,SalesInvoiceHeader,FlowFieldBuffer,"										
+"ProcessError,ErrorText)"										
+THEN BEGIN										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+TsError := 9999;										
+"ErrorText := STRSUBSTNO(Text001,'GET_SALES_INVOICE_LIST');"										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetTransOrderHeader@1100409014(OrderNo@1100409003 : Code[20];VAR TransOrderHeader@1100409001 : TEMPORARY Record 10012703;V	AR	TsE	rr	or@	1100409002 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409004 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetTransOrderHeader										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_TRANS_ORDER_LIST') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetTransOrderList(OrderNo,0,TransOrderHeader,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"IF PosFuncProfile.""TS Sales Document"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.GetTransOrderHeader(OrderNo,TransOrderHeader,TsError) THEN"										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetOptionValueEntries@1100409018(pConfigIDMin@1100409003 : Code[30];pConfigIDMax@1100409001 : Code[30];VAR pOptionValueEnt	ry@	110	4	90	00 : TEMPORARY Record 10012713;VAR pFlowFieldBuffer@1100409004 : TEMPORARY Record 99001649;VAR TsError@1100409002 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409006 : Boolean;										
+ErrorText@1100409005 : Text[1024];										
+BEGIN										
+//GetOptionValueEntries										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_OPTION_VALUE_ENTRIES') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetOptionValueEntries(pConfigIDMin,pConfigIDMax,pOptionValueEntry,pFlowFieldBuffer,"										
+"ProcessError,ErrorText)"										
+THEN BEGIN										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+TsError := 9999;										
+"ErrorText := STRSUBSTNO(Text001,'GET_OPTION_VALUE_ENTRIES');"										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetAlreadyDeliveredLines@1100409019(OrderNo@1100409003 : Code[20];VAR TransOrderLines@1100409004 : TEMPORARY Record 100127	04;	VAR	T	sEr	ror@1100409002 : Integer) : Boolean;					
+VAR										
+TransOrderHeaderTemp@1100409001 : TEMPORARY Record 10012703;										
+ProcessError@1100409005 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetAlreadyDeliveredLines										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_ALREADY_PROCESSED_LINES') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetAlreadyProcessedLines(OrderNo,0,TransOrderLines,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"IF PosFuncProfile.""TS Sales Document"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+TransOrderHeaderTemp.RESET;										
+TransOrderHeaderTemp.DELETEALL;										
+"IF NOT DCUTIL3.GetAlreadyDeliveredLines1(OrderNo,TransOrderHeaderTemp,TsError) THEN"										
+EXIT(FALSE);										
+"IF NOT DCUTIL3.GetAlreadyDeliveredLines2(TransOrderHeaderTemp,TransOrderLines,TsError) THEN"										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetPostedSpecialOrder@1100409020(ContactNo@1100409003 : Code[20];CustomerNo@1100409001 : Code[20];VAR SalesInvoiceHeader@1	100	409	0	0:00	TEMPORARY Record 112;VAR FlowFieldBuffer@1100409004 : TEMPORARY Record 99001649;VAR TsError@1100409002 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409006 : Boolean;										
+ErrorText@1100409005 : Text[1024];										
+BEGIN										
+//GetPostedSpecialOrder										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_SALES_INVOICE_LIST') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetSalesInvoice(ContactNo,CustomerNo,'',SalesInvoiceHeader,FlowFieldBuffer,"										
+"ProcessError,ErrorText)"										
+THEN BEGIN										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+TsError := 9999;										
+"ErrorText := STRSUBSTNO(Text001,'GET_SALES_INVOICE_LIST');"										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetPostedSalesInvoiceLines@1100409025(InvoiceNo@1100409002 : Code[20];VAR SalesInvLine@1100409001 : TEMPORARY Record 113;V	AR	TsE	rr	or@	1100409003 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409004 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetPostedSalesInvoiceLines										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_SALES_INVOICE_LINES') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetSalesInvoiceLines(InvoiceNo,SalesInvLine,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"IF PosFuncProfile.""TS Sales Document"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.GetPostedSalesInvoiceLines(InvoiceNo,SalesInvLine,TsError) THEN"										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetPostedOptionValueEntries@1100409026(pConfigIDMin@1100409003 : Code[30];pConfigIDMax@1100409001 : Code[30];VAR pPstOptio	nVa	lue	En	try	@1100409000 : TEMPORARY Record 10012729;VAR pFlowFieldBuffer@1100409004 : TEMPORARY Record 99001649;VAR TsError@1100409002 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409006 : Boolean;										
+ErrorText@1100409005 : Text[1024];										
+BEGIN										
+//GetPostedOptionValueEntries										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_PST_OPTION_VALUE_ENTRIES') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetPstOptionValueEntries(pConfigIDMin,pConfigIDMax,pPstOptionValueEntry,pFlowFieldBuffer,"										
+"ProcessError,ErrorText)"										
+THEN BEGIN										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+TsError := 9999;										
+"ErrorText := STRSUBSTNO(Text001,'GET_PST_OPTION_VALUE_ENTRIES');"										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE UpdateSalesLine@1100409027(VAR SalesLine@1000 : Record 37;OnlyStatus@1100409000 : Boolean) : Boolean;										
+VAR										
+ProcessError@1100409002 : Boolean;										
+ErrorText@1100409001 : Text[1024];										
+BEGIN										
+//UpdateSalesLine										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_SALES_LINE') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.SendSalesLine(SalesLine,OnlyStatus,ProcessError,ErrorText) THEN"										
+EXIT(FALSE);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+IF OnlyStatus THEN BEGIN										
+"IF NOT DCUTIL3.UpdateSalesLineStatus(SalesLine,TRUE) THEN"										
+EXIT(FALSE);										
+END ELSE BEGIN										
+"IF NOT DCUTIL3.UpdateSalesLine(SalesLine,TRUE) THEN"										
+EXIT(FALSE);										
+END;										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetSpoPayments@1100409028(OrderNo@1100409000 : Code[20];VAR TransPaymentEntry@1100409002 : TEMPORARY Record 99001474;VAR T	sEr	ror	@1	100	409001 : Integer) : Boolean;					
+VAR										
+StepOk@1100409003 : Boolean;										
+TSDistLocation@1100409004 : Code[10];										
+TenderType@1100409012 : Record 99001462;										
+PaymentLinesTemp@1100409005 : TEMPORARY Record 10012727;										
+AllPaymentEntry@1100409006 : TEMPORARY Record 99001474;										
+lText001@1100409011 : TextConst 'ENU=None Spo payment;ESP=Ning£n pago Ped.Esp.';										
+ProcessError@1100409008 : Boolean;										
+ErrorText@1100409007 : Text[1024];										
+BEGIN										
+//GetSpoPayments										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF PosFuncProfile.""TS Customer Invoice"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+										
+"TenderType.SETRANGE(""Store No."",Globals.StoreNo);"										
+"TenderType.SETRANGE(TenderType.""Auto Account Payment Tender"",TRUE);"										
+"TenderType.SETRANGE(""Function"",TenderType.""Function""::Customer);"										
+TenderType.FINDFIRST;										
+										
+StepOk := TRUE;										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_SPO_PAYMENTS') AND"										
+"POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_TRANS_PAYMENTS')"										
+THEN BEGIN										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetTransPayments(OrderNo,AllPaymentEntry,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+"IF NOT WebServicesClient.GetSpoPayments(OrderNo,PaymentLinesTemp,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"TSDistLocation := PosFuncProfile.""Customer Invoice"";"										
+"IF NOT DCUTIL3.GetTransPaymentEntry(TSDistLocation,OrderNo,Globals.StoreNo,AllPaymentEntry,TsError) THEN"										
+"IF (PosFuncProfile.""Customer Invoice 2"" <> '') THEN BEGIN"										
+"TSDistLocation := PosFuncProfile.""Customer Invoice 2"";"										
+"IF NOT DCUTIL3.GetTransPaymentEntry(TSDistLocation,OrderNo,Globals.StoreNo,AllPaymentEntry,TsError) THEN"										
+StepOk := FALSE;										
+END ELSE										
+StepOk := FALSE;										
+IF NOT StepOk THEN										
+EXIT(StepOk);										
+"IF NOT DCUTIL3.GetPaymentLineEntry(TSDistLocation,OrderNo,PaymentLinesTemp,TsError) THEN"										
+StepOk := FALSE;										
+IF NOT StepOk THEN										
+EXIT(StepOk);										
+END;										
+										
+AllPaymentEntry.RESET;										
+IF AllPaymentEntry.FIND('-') THEN BEGIN										
+REPEAT										
+"IF (AllPaymentEntry.""Tender Type"" = TenderType.Code) AND"										
+"(AllPaymentEntry.""Amount Tendered"" < 0) THEN BEGIN"										
+TransPaymentEntry.INIT;										
+TransPaymentEntry := AllPaymentEntry;										
+"TransPaymentEntry.""Amount Tendered"" := -TransPaymentEntry.""Amount Tendered"";"										
+"TransPaymentEntry.""Amount in Currency"" := -TransPaymentEntry.""Amount in Currency"";"										
+TransPaymentEntry.INSERT;										
+END;										
+UNTIL AllPaymentEntry.NEXT = 0;										
+END;										
+										
+PaymentLinesTemp.RESET;										
+IF PaymentLinesTemp.FINDSET THEN										
+REPEAT										
+TransPaymentEntry.INIT;										
+"TransPaymentEntry.""Store No."" := Globals.StoreNo;"										
+"TransPaymentEntry.""POS Terminal No."" := COPYSTR(FORMAT(PaymentLinesTemp.Origin,0,'<Text>'),1,"										
+"MAXSTRLEN(TransPaymentEntry.""POS Terminal No.""));"										
+"TransPaymentEntry.""Transaction No."" := PaymentLinesTemp.""Line No."";"										
+"TransPaymentEntry.""Line No."" := PaymentLinesTemp.""Document Line No."";"										
+"TransPaymentEntry.""Receipt No."" := PaymentLinesTemp.""Receipt No."";"										
+"TransPaymentEntry.""Order No."" := PaymentLinesTemp.""Document No."";"										
+"TransPaymentEntry.Date := PaymentLinesTemp.""Date Created"";"										
+"TransPaymentEntry.Time := PaymentLinesTemp.""Time Created"";"										
+"TransPaymentEntry.""Amount Tendered"" := PaymentLinesTemp.Amount;"										
+"TransPaymentEntry.""Card or Account"" := FORMAT(PaymentLinesTemp.Origin,0,'<Text>');"										
+TransPaymentEntry.INSERT;										
+UNTIL PaymentLinesTemp.NEXT = 0;										
+										
+EXIT(StepOk);										
+END;										
+										
+PROCEDURE GetWorkShift@1100409000(pStoreNo@1100409002 : Code[10];pShiftDate@1100409003 : Date;pShiftNo@1100409001 : Code[10];pWorkSh	ift	Tem	p@	110	0409005 : TEMPORARY Record 99001507;VAR TsError@1100409004 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409006 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetWorkShift										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_WORK_SHIFT') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetWorkShift(pStoreNo,pShiftDate,pShiftNo,pWorkShiftTemp,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"IF PosFuncProfile.""TS Send Transactions"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.GetWorkShift(pStoreNo,pShiftDate,pShiftNo,pWorkShiftTemp,TsError) THEN"										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetTransOrderEntries@1100409001(VAR TransOrderHeader@1100409000 : TEMPORARY Record 10012703;VAR TransOrderLines@1100409001	:	TEM	PO	RAR	Y Record 10012704;VAR TsError@1100409002 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409004 : Boolean;										
+ErrorText@1100409003 : Text[1024];										
+BEGIN										
+//GetTransOrderEntries										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_TRANS_ORDER_ENTRIES') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetTransOrderEntries(TransOrderHeader.""Store No."",TransOrderHeader.""POS Terminal No."","										
+"TransOrderHeader.""Transaction No."",TransOrderLines,ProcessError,ErrorText)"										
+THEN BEGIN										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"IF PosFuncProfile.""TS Sales Document"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.GetTransOrderEntries(TransOrderHeader,TransOrderLines,TsError) THEN"										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE UpdateTransOrderHeader@1100409029(VAR TransOrderHeader@1000 : Record 10012703) : Boolean;										
+VAR										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//UpdateTransOrderHeader										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_TRANS_ORDER_HEADER') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.SendTransOrder(TransOrderHeader,ProcessError,ErrorText) THEN"										
+EXIT(FALSE);										
+END ELSE BEGIN										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.UpdateTransOrderHeader(TransOrderHeader,TRUE) THEN"										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetAlreadyCanceledLines@1100409030(OrderNo@1100409003 : Code[20];VAR TransOrderLines@1100409004 : TEMPORARY Record 1001270	4;V	AR	Ts	Err	or@1100409002 : Integer) : Boolean;					
+VAR										
+TransOrderHeaderTemp@1100409001 : TEMPORARY Record 10012703;										
+ProcessError@1100409005 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetAlreadyCanceledLines										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_ALREADY_PROCESSED_LINES') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetAlreadyProcessedLines(OrderNo,1,TransOrderLines,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"IF PosFuncProfile.""TS Sales Document"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+TransOrderHeaderTemp.RESET;										
+TransOrderHeaderTemp.DELETEALL;										
+"IF NOT DCUTIL3.GetAlreadyCanceledLines1(OrderNo,TransOrderHeaderTemp,TsError) THEN"										
+EXIT(FALSE);										
+"IF NOT DCUTIL3.GetAlreadyCanceledLines2(TransOrderHeaderTemp,TransOrderLines,TsError) THEN"										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetPendingTransOrders@1100409031(OrderNo@1100409003 : Code[20];VAR TransOrderHeader@1100409004 : TEMPORARY Record 10012703	;VA	R T	sE	rro	r@1100409002 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//GetPendingTransOrders										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_TRANS_ORDER_LIST') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetTransOrderList(OrderNo,1,TransOrderHeader,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"IF PosFuncProfile.""TS Sales Document"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.GetPendingTransOrders(OrderNo,TransOrderHeader,TsError) THEN"										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetOpenVoucherEntry@1100409033(VoucherNo@1100409003 : Code[20];VAR TmpVoucherEntries@1100409002 : Record 99001467;VAR TsEr	ror	@11	0	409	000 : Integer) : Boolean;					
+VAR										
+ProcessError@1100409004 : Boolean;										
+ErrorText@1100409001 : Text[1024];										
+BEGIN										
+//GetOpenVoucherEntry										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_VOUCHER_ENTRIES') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetVoucherEntries(VoucherNo,TmpVoucherEntries,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+TsError := 9999;										
+"ErrorText := STRSUBSTNO(Text001,'GET_VOUCHER_ENTRIES');"										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+EXIT(FALSE);										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetDataEntryBalance@1100409032(VAR pDataEntryType@1100409002 : Code[20];VAR pDataEntryNo@1100409001 : Code[20];VAR TsError	@11	4	9	0	: Integer;VAR pBalance@1100409003 : Decimal;VAR ErrorTxt@1100409004 : Text[250]) : Boolean;					
+VAR										
+ProcessError@1100409006 : Boolean;										
+ErrorText@1100409005 : Text[1024];										
+BEGIN										
+//GetDataEntryBalance										
+IF NOT Initialize THEN										
+EXIT(FALSE);										
+										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_DATA_ENTRY_BALANCE') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetDataEntryBalance(pDataEntryType,pDataEntryNo,pBalance,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+TsError := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+END ELSE BEGIN										
+"IF PosFuncProfile.""TS Data Entries"" THEN"										
+"DCUTIL3.Initialize(PosFuncProfile.""Profile ID"");"										
+"IF NOT DCUTIL3.GetDataEntryBalance(pDataEntryType,pDataEntryNo,TsError,pBalance,ErrorTxt) THEN"										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE WebUpdatePOSAfterStatementCode@1100409034(StatementCode@1100409001 : Code[20];VAR ErrorCode@1100409000 : Integer) : Boolea	n;									
+VAR										
+Trans@1100409012 : TEMPORARY Record 99001472;										
+Trans2@1100409011 : Record 99001472;										
+SalesEntry@1100409010 : Record 99001473;										
+PaymEntry@1100409009 : Record 99001474;										
+IncExpEntry@1100409008 : Record 99001475;										
+InfoCodeEntry@1100409007 : Record 99001478;										
+TendDeclEntry@1100409006 : Record 99001465;										
+InventoryEntry@1100409005 : Record 99001490;										
+CardEntry@1100409004 : Record 99008987;										
+FirstTrans@1100409003 : Integer;										
+LastTrans@1100409002 : Integer;										
+ProcessError@1100409014 : Boolean;										
+ErrorText@1100409013 : Text[1024];										
+BEGIN										
+//WebUpdatePOSAfterStatementCode										
+"DCUTIL3.GetTransNumbers(StatementCode,FirstTrans,LastTrans);"										
+										
+IF (FirstTrans = 0) AND (LastTrans = 0)THEN										
+EXIT(TRUE);										
+										
+CLEAR(ErrorCode);										
+										
+"IF NOT WebServicesClient.GetTransHeaderList(0,FirstTrans,LastTrans,'',Trans,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError THEN BEGIN										
+ErrorCode := 9999;										
+"IF PosFuncProfile.""Show Web Process Messages"" THEN"										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+										
+Trans.RESET;										
+IF Trans.FIND('-') THEN										
+REPEAT										
+"IF Trans2.GET(Trans.""Transaction No."") THEN BEGIN"										
+"Trans2.""Z-Report ID"" := Trans.""Z-Report ID"";"										
+IF NOT Trans2.MODIFY(TRUE) THEN;										
+END;										
+										
+// Payment Entries										
+"PaymEntry.SETRANGE(""Transaction No."",Trans.""Transaction No."");"										
+IF PaymEntry.FIND('-') THEN REPEAT										
+"PaymEntry.""Z-Report ID"" := Trans.""Z-Report ID"";"										
+IF PaymEntry.MODIFY(TRUE) THEN;										
+UNTIL PaymEntry.NEXT = 0;										
+										
+// Income Expense Entries										
+"IncExpEntry.SETRANGE(""Transaction No."",Trans.""Transaction No."");"										
+IF IncExpEntry.FIND('-') THEN REPEAT										
+"IncExpEntry.""Z-Report ID"" := Trans.""Z-Report ID"";"										
+IF IncExpEntry.MODIFY(TRUE) THEN;										
+UNTIL IncExpEntry.NEXT = 0;										
+										
+//Tender Declaration Entries										
+"TendDeclEntry.SETRANGE(""Transaction No."",Trans.""Transaction No."");"										
+IF TendDeclEntry.FIND('-') THEN REPEAT										
+"TendDeclEntry.""Z-Report ID"" := Trans.""Z-Report ID"";"										
+IF TendDeclEntry.MODIFY(TRUE) THEN;										
+UNTIL TendDeclEntry.NEXT = 0;										
+UNTIL Trans.NEXT = 0;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE WebGetTransByStatmentCode@1100409036(StatementCode@1100409001 : Code[20];VAR ErrorCode@1100409000 : Integer) : Boolean;										
+VAR										
+Trans@1100409002 : TEMPORARY Record 99001472;										
+ProcessError@1100409004 : Boolean;										
+ErrorText@1100409003 : Text[1024];										
+BEGIN										
+//WebGetTransByStatmentCode										
+CLEAR(ErrorCode);										
+										
+"IF NOT WebServicesClient.GetTransHeaderList(1,0,0,StatementCode,Trans,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError  THEN BEGIN										
+ErrorCode := 9999;										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+										
+Trans.RESET;										
+IF Trans.FIND('-') THEN										
+REPEAT										
+"IF NOT WebServicesClient.GetTransStatementCode(Trans,ProcessError,ErrorText) THEN BEGIN"										
+IF ProcessError  THEN BEGIN										
+ErrorCode := 9999;										
+MESSAGE(ErrorText);										
+END;										
+EXIT(FALSE);										
+END;										
+UNTIL Trans.NEXT = 0;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE SendUnsentTablesDD3@1100409078(MaxNoOfRecords@1200070011 : Integer;AllTrans@1100409004 : Boolean);										
+VAR										
+Trans@1200070000 : Record 99001472;										
+DataEntry@1200070004 : Record 99001558;										
+RefTrans@1200070002 : Record 99001472;										
+POSTrans@1200070009 : Record 99008980;										
+Staff@1200070014 : Record 99001461;										
+LocalDC3Util1@1200070006 : Codeunit 99008920;										
+LocalDC3Util2@1200070005 : Codeunit 99008920;										
+ok@1200070001 : Boolean;										
+counter@1200070012 : Integer;										
+RetryAction@1200070003 : Record 99001615;										
+TmpAction@1200070010 : Record 99001615;										
+tmpDataEntry@1200070007 : Record 99001558;										
+tmpERROR@1200070008 : Integer;										
+found@1200070013 : Boolean;										
+SendOk@1100409003 : Boolean;										
+TimeLastSendText@1100409002 : Text[30];										
+TimeLastSend@1100409001 : Time;										
+TimeNow@1100409000 : Time;										
+ProcessError@1100409006 : Boolean;										
+ErrorText@1100409005 : Text[1024];										
+BEGIN										
+//SendUnsentTablesDD3										
+//LS7.1-02 -										
+"RetryAction.SETRANGE(Table,DATABASE::""Member Process Order Entry"");"										
+IF RetryAction.FINDSET THEN										
+REPEAT										
+ok := UpdateUnsentMemberProcessOrder(RetryAction);										
+"IF ok AND NOT POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_TRANSACTION') THEN BEGIN"										
+TmpAction := RetryAction;										
+TmpAction.DELETE;										
+END;										
+UNTIL NOT ok OR (RetryAction.NEXT = 0);										
+//LS7.1-02 +										
+IF NOT Initialize THEN BEGIN //LS7.1-02 BEGIN added										
+POSGUI.ScreenDisplay('');										
+EXIT;										
+END; //LS7.1-02										
+										
+"LocalDC3Util1.Initialize(PosFuncProfile.""Profile ID"");"										
+										
+ok := TRUE;										
+SendOk := TRUE;										
+"Globals.SetValue('TS_ERROR','');"										
+										
+"RetryAction.SETRANGE(Table,DATABASE::""Transaction Header"");"										
+"RetryAction.SETRANGE(Int1,TSAction::Update);"										
+"RetryAction.SETRANGE(Int2,0);"										
+										
+"IF PosFuncProfile.""DD Send Transaction"" THEN BEGIN"										
+IF (NOT AllTrans) THEN BEGIN										
+"SendOk := (PosFuncProfile.""DD Packet size (Trans.)"" = 0) AND (PosFuncProfile.""DD Time Between Send (min)"" = 0);"										
+IF NOT SendOk THEN BEGIN										
+"IF (PosFuncProfile.""DD Packet size (Trans.)"" <> 0) THEN BEGIN"										
+counter := RetryAction.COUNT;										
+"IF (counter >= PosFuncProfile.""DD Packet size (Trans.)"") THEN"										
+SendOk := TRUE;										
+END;										
+END;										
+										
+IF NOT SendOk THEN BEGIN										
+"IF (PosFuncProfile.""DD Time Between Send (min)"" <> 0) THEN BEGIN"										
+TimeLastSendText := Globals.GetValue('TIME_LAST_SEND');										
+IF (TimeLastSendText <> '') THEN BEGIN										
+"IF NOT EVALUATE(TimeLastSend,TimeLastSendText) THEN"										
+TimeLastSend := 010000T;										
+END										
+ELSE										
+TimeLastSend := 010000T;										
+										
+TimeNow := TIME;										
+"IF ((TimeNow - TimeLastSend)/60000 > PosFuncProfile.""DD Time Between Send (min)"") THEN"										
+SendOk := TRUE;										
+END;										
+END;										
+END;										
+END;										
+										
+counter := 0;										
+IF SendOk THEN BEGIN										
+IF RetryAction.FIND('-') THEN BEGIN										
+"IF (PosFuncProfile.""DD Time Between Send (min)"" <> 0) THEN BEGIN"										
+TimeLastSendText := FORMAT(TimeNow);										
+"Globals.SetValue('TIME_LAST_SEND',TimeLastSendText);"										
+END;										
+										
+counter := 0;										
+"LocalDC3Util1.Initialize(PosFuncProfile.""Profile ID"");"										
+globalTempTrans.DELETEALL;										
+REPEAT										
+"globalTempTrans.""Store No."" := Globals.StoreNo;"										
+"globalTempTrans.""POS Terminal No."" := Globals.TerminalNo;"										
+"EVALUATE(globalTempTrans.""Transaction No."",RetryAction.Key1);"										
+"globalTempTrans.""Store No."" := RetryAction.""Store No."";"										
+"globalTempTrans.""POS Terminal No."" := RetryAction.""POS Terminal No."";"										
+"IF NOT Trans.GET(globalTempTrans.""Store No."",globalTempTrans.""POS Terminal No."","										
+"globalTempTrans.""Transaction No."")"										
+THEN										
+RetryAction.DELETE										
+ELSE										
+IF globalTempTrans.INSERT THEN;										
+counter += 1;										
+UNTIL (RetryAction.NEXT = 0) OR (counter = MaxNoOfRecords);										
+										
+ok := SendWholeTmpTransaction();										
+IF ok AND globalTempTrans.FIND('-') THEN BEGIN										
+REPEAT										
+"TmpAction.GET(DATABASE::""Transaction Header"",FORMAT(globalTempTrans.""Transaction No.""),'',"										
+"globalTempTrans.""Store No."",globalTempTrans.""POS Terminal No."",globalTempTrans.""Transaction No."");"										
+TmpAction.DELETE;										
+"IF Trans.GET(globalTempTrans.""Store No."",globalTempTrans.""POS Terminal No."", globalTempTrans.""Transaction No."") THEN BEGIN"										
+Trans.Replicated := TRUE;										
+Trans.MODIFY(TRUE);										
+END;										
+UNTIL globalTempTrans.NEXT = 0;										
+END ELSE										
+counter := 0;										
+END;										
+END;										
+										
+"IF PosFuncProfile.""DD Send Transaction"" THEN BEGIN"										
+"RetryAction.SETRANGE(""Store No."");"										
+"RetryAction.SETRANGE(""POS Terminal No."");"										
+END;										
+										
+//This is updating the z-report id of transactions after report has been made.										
+//As the Z-reporting is itself a batch work taking some time										
+//the system overlooks the max record to send here and updates all the z-report transactions to remote db										
+IF ok AND ((counter <> MaxNoOfRecords) OR (MaxNoOfRecords = 0)) THEN BEGIN										
+"RetryAction.SETRANGE(Int2,1);"										
+IF RetryAction.FIND('-') THEN REPEAT										
+IF ok THEN										
+"ok := UpdateStatementTransactions(RetryAction.Key1,RetryAction.Key2);"										
+UNTIL RetryAction.NEXT = 0;										
+										
+IF ok THEN BEGIN										
+RetryAction.DELETEALL;										
+END ELSE										
+EXIT;										
+END;										
+										
+//Now we look for other tables needed to be update from the TS work table										
+RetryAction.SETRANGE(Table);										
+RetryAction.SETRANGE(Int1);										
+RetryAction.SETRANGE(Int2);										
+IF RetryAction.FIND('-') AND ((counter <> MaxNoOfRecords) OR (MaxNoOfRecords = 0)) THEN BEGIN										
+"LocalDC3Util2.Initialize(PosFuncProfile.""Profile ID"");"										
+REPEAT										
+IF RetryAction.Int1 <> 0 THEN BEGIN										
+ok := FALSE;										
+CASE RetryAction.Table OF										
+"DATABASE::""POS Data Entry"" : BEGIN"										
+ok := TRUE;										
+"DataEntry.""Entry Type"" := BOUtil.SeparateTableKey(1,RetryAction.Key1);"										
+"DataEntry.""Entry Code"" := BOUtil.SeparateTableKey(2,RetryAction.Key1);"										
+IF DataEntry.FIND THEN BEGIN										
+POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + DataEntry.TABLECAPTION);										
+IF (DataEntry.Amount = 0) THEN										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'GET_DATA_ENTRY') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.GetDataEntry(DataEntry.""Entry Type"",DataEntry.""Entry Code"",tmpDataEntry,ProcessError,Erro"	rTe	xt)	T	HEN	BEGIN					
+"UpdateTSRetryEntryErrorMessage(RetryAction,ErrorText);"										
+IF ProcessError THEN										
+tmpERROR := 9999;										
+END ELSE BEGIN										
+DataEntry.Amount := tmpDataEntry.Amount;										
+"DataEntry.""Created by Receipt No."" := tmpDataEntry.""Created by Receipt No."";"										
+"DataEntry.""Created by Line No."" := tmpDataEntry.""Created by Line No."";"										
+END;										
+END;										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_DATA_ENTRY') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"ok := WebServicesClient.SendDataEntry(DataEntry,ProcessError,ErrorText);"										
+IF NOT ok THEN										
+"UpdateTSRetryEntryErrorMessage(RetryAction,ErrorText);"										
+END ELSE										
+"ok := LocalDC3Util2.UpdateDataEntry(DataEntry,TRUE);"										
+END;										
+END;										
+"DATABASE::""POS Transaction"" : BEGIN"										
+ok := TRUE;										
+IF RetryAction.Int1 = TSAction::Delete THEN BEGIN										
+POSGUI.ScreenDisplay(_DeleteTxt1 + ' ' + POSTrans.TABLECAPTION);										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",RetryAction.""Web Request ID"") THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"ok := WebServicesClient.DeletePosTrans(RetryAction.""Web Request ID"",RetryAction.Key1,ProcessError,ErrorText);"										
+IF NOT ok THEN										
+"UpdateTSRetryEntryErrorMessage(RetryAction,ErrorText);"										
+END ELSE										
+"ok := LocalDC3Util1.DeleteSpecPOSTrans(RetryAction.Key1,RetryAction.Code1);"										
+END ELSE BEGIN										
+IF POSTrans.GET(RetryAction.Key1) THEN BEGIN										
+POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + POSTrans.TABLECAPTION);										
+"ok := SendPOSTrans(POSTrans,RetryAction.Code1,RetryAction.""Web Request ID"");"										
+END;										
+END;										
+END;										
+DATABASE::Staff : BEGIN										
+ok := TRUE;										
+Staff.GET(RetryAction.Key1);										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_STAFF') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"ok := WebServicesClient.SendStaff(Staff,ProcessError,ErrorText);"										
+IF NOT ok THEN										
+"UpdateTSRetryEntryErrorMessage(RetryAction,ErrorText);"										
+END ELSE										
+"ok := LocalDC3Util2.UpdateStaff(Staff,TRUE)"										
+END;										
+"DATABASE::""Voucher Entries"" : BEGIN"										
+"ok := UpdateUnsentVoucherEntriesDD3(LocalDC3Util2,RetryAction);"										
+END;										
+{ //LS7.1-02 -										
+"DATABASE::""Trans. Point Entry"" : BEGIN"										
+"ok := UpdUnsentLoyaltyPointsTransDD3(LocalDC3Util2,RetryAction);"										
+END;										
+} //LS7.1-02 +										
+DATABASE::Customer : BEGIN										
+"ok := UpdateUnsentCustomerDD3(LocalDC3Util2,RetryAction);"										
+END;										
+DATABASE::Contact : BEGIN										
+"ok := UpdateUnsentContactDD3(LocalDC3Util2,RetryAction);"										
+END;										
+"DATABASE::""Contact Business Relation"" : BEGIN"										
+"ok := UpdUnsentContactBusRelationDD3(LocalDC3Util2,RetryAction);"										
+END;										
+"DATABASE::""MSR Card Link Setup"" : BEGIN"										
+"ok := UpdateUnsentMSRCardDD3(LocalDC3Util2,RetryAction);"										
+END;										
+"DATABASE::""POS Start Status"" : BEGIN"										
+"ok := UpdUnsendPosStartStatusDD3(LocalDC3Util2,RetryAction);"										
+END;										
+"DATABASE::""Work Shift Entry"": BEGIN"										
+"ok := UpdateUnsentWorkShiftEntryDD3(LocalDC3Util2,RetryAction);"										
+END;										
+"DATABASE::""Work Shift RBO"": BEGIN"										
+"ok := UpdateUnsentWorkShiftRBODD3(LocalDC3Util2,RetryAction);"										
+END;										
+"DATABASE::""Member Process Order Entry"": BEGIN"										
+ok := ProcessTransMemberPoints(RetryAction);										
+END;										
+END;  //CASE										
+IF ok THEN BEGIN										
+TmpAction := RetryAction;										
+TmpAction.DELETE;										
+END;										
+counter := counter + 1;										
+END;										
+UNTIL NOT ok OR (RetryAction.NEXT = 0) OR (counter = MaxNoOfRecords);										
+LocalDC3Util2.Disconnect();										
+END;										
+										
+LocalDC3Util1.Disconnect();										
+POSGUI.ScreenDisplay('');										
+END;										
+										
+PROCEDURE UpdateUnsentVoucherEntriesDD3@1100409121(VAR pDCUtil3@1200070001 : Codeunit 99008920;VAR pRetryAction@1200070000 : Record	990	16	15	) :	Boolean;					
+VAR										
+VoucherEntries@1200070004 : Record 99001467;										
+Ok@1200070002 : Boolean;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//UpdateUnsentVaucherEntriesDD3										
+Ok := TRUE;										
+VoucherEntries.RESET;										
+"VoucherEntries.SETRANGE(""Store No."",pRetryAction.""Store No."");"										
+"VoucherEntries.SETRANGE(""POS Terminal No."",pRetryAction.""POS Terminal No."");"										
+"VoucherEntries.SETRANGE(""Transaction No."",pRetryAction.""Transaction No."");"										
+"EVALUATE(VoucherEntries.""Line No."",pRetryAction.Key1);"										
+"VoucherEntries.SETRANGE(""Line No."",VoucherEntries.""Line No."");"										
+IF VoucherEntries.FIND('-') THEN BEGIN										
+POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + VoucherEntries.TABLECAPTION);										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_VOUCHER_ENTRY') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"Ok := WebServicesClient.SendVoucherEntry(VoucherEntries,ProcessError,ErrorText);"										
+IF NOT Ok THEN										
+"UpdateTSRetryEntryErrorMessage(pRetryAction,ErrorText);"										
+END ELSE										
+"Ok := pDCUtil3.UpdateVoucherEntry(VoucherEntries,TRUE);"										
+END;										
+EXIT(Ok);										
+END;										
+										
+PROCEDURE UpdateUnsentCustomerDD3@1100409119(VAR pDCUtil3@1100409002 : Codeunit 99008920;VAR pRetryAction@1200070000 : Record 990016	15)	:	Bo	ole	an;					
+VAR										
+Customer@1200070002 : Record 18;										
+Ok@1200070003 : Boolean;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//UpdateUnsentCustomerDD3										
+Ok := TRUE;										
+IF Customer.GET(pRetryAction.Key1) THEN BEGIN										
+"POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + Customer.TABLECAPTION + ': ' + Customer.""No."");"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_CUSTOMER') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"Ok := WebServicesClient.SendCustomer(Customer,ProcessError,ErrorText);"										
+IF NOT Ok THEN										
+"UpdateTSRetryEntryErrorMessage(pRetryAction,ErrorText);"										
+END ELSE										
+"Ok := pDCUtil3.UpdateCustomer(Customer,TRUE);"										
+END;										
+EXIT(Ok);										
+END;										
+										
+PROCEDURE UpdateUnsentContactDD3@1100409118(VAR pDCUtil3@1100409002 : Codeunit 99008920;VAR pRetryAction@1200070000 : Record 9900161	5)	: B	oo	lea	n;					
+VAR										
+Contact@1200070002 : Record 5050;										
+Ok@1200070003 : Boolean;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//UpdateUnsentContactDD3										
+Ok := TRUE;										
+IF Contact.GET(pRetryAction.Key1) THEN BEGIN										
+"POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + Contact.TABLECAPTION + ': ' + Contact.""No."");"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_CONTACT') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"Ok := WebServicesClient.SendContact(Contact,ProcessError,ErrorText);"										
+IF NOT Ok THEN										
+"UpdateTSRetryEntryErrorMessage(pRetryAction,ErrorText);"										
+END ELSE										
+"Ok := pDCUtil3.UpdateContact(Contact,TRUE);"										
+END;										
+EXIT(Ok);										
+END;										
+										
+PROCEDURE UpdUnsentContactBusRelationDD3@1100409117(VAR pDCUtil3@1100409002 : Codeunit 99008920;VAR pRetryAction@1200070000 : Record	99	1	61	5)	: Boolean;					
+VAR										
+ContactBusRelation@1200070002 : Record 5054;										
+Ok@1200070003 : Boolean;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//UpdUnsentContactBusRelationDD3										
+Ok := TRUE;										
+"IF ContactBusRelation.GET(pRetryAction.Key1,pRetryAction.Key2) THEN BEGIN"										
+"POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + ContactBusRelation.TABLECAPTION + ': ' + ContactBusRelation.""Contact No."");"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_CONTACT_BUS_RELATION') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"Ok := WebServicesClient.SendContactBusRelation(ContactBusRelation,ProcessError,ErrorText);"										
+IF NOT Ok THEN										
+"UpdateTSRetryEntryErrorMessage(pRetryAction,ErrorText);"										
+END ELSE										
+"Ok := pDCUtil3.UpdateContactBusRelation(ContactBusRelation,TRUE);"										
+END;										
+EXIT(Ok);										
+END;										
+										
+PROCEDURE UpdateUnsentMSRCardDD3@1100409116(VAR pDCUtil3@1100409002 : Codeunit 99008920;VAR pRetryAction@1200070000 : Record 9900161	5)	: B	oo	lea	n;					
+VAR										
+MSRCard@1200070002 : Record 10000729;										
+Ok@1200070003 : Boolean;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//UpdateUnsentMSRCardDD3										
+Ok := TRUE;										
+IF MSRCard.GET(pRetryAction.Key1) THEN BEGIN										
+"POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + MSRCard.TABLECAPTION + ': ' + MSRCard.""Card Number"");"										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_MSR_CARD') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"Ok := WebServicesClient.SendMSRCard(MSRCard,ProcessError,ErrorText);"										
+IF NOT Ok THEN										
+"UpdateTSRetryEntryErrorMessage(pRetryAction,ErrorText);"										
+END ELSE										
+"Ok := pDCUtil3.UpdateMSRCard(MSRCard,TRUE);"										
+END;										
+EXIT(Ok);										
+END;										
+										
+PROCEDURE UpdateUnsentWorkShiftEntryDD3@1100409115(VAR pDCUtil3@1100409002 : Codeunit 99008920;VAR pRetryAction@10012000 : Record 99	1	615	)	: B	oolean;					
+VAR										
+DateTmp@10012004 : Date;										
+WorkShiftEntry@10012003 : Record 99001508;										
+Ok@10012002 : Boolean;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//UpdateUnsentWorkShiftEntryDD3										
+Ok := TRUE;										
+"EVALUATE(DateTmp,pRetryAction.Key1);"										
+"IF WorkShiftEntry.GET(pRetryAction.""Store No."",DateTmp,pRetryAction.Key2,pRetryAction.Code1) THEN BEGIN"										
+POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + WorkShiftEntry.TABLECAPTION);										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_WORK_SHIFT') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.SendWorkShiftEntry(WorkShiftEntry,FALSE,ProcessError,ErrorText) THEN"										
+Ok := FALSE										
+ELSE										
+Ok := TRUE;										
+IF NOT Ok THEN										
+"UpdateTSRetryEntryErrorMessage(pRetryAction,ErrorText);"										
+END ELSE										
+"Ok := pDCUtil3.UpdateWorkShiftEntry(WorkShiftEntry,TRUE);"										
+END;										
+EXIT(Ok);										
+END;										
+										
+PROCEDURE UpdateUnsentWorkShiftRBODD3@1100409114(VAR pDCUtil3@1100409002 : Codeunit 99008920;VAR pRetryAction@10012000 : Record 9900	161	5)	:	Boo	lean;					
+VAR										
+WorkShiftRBO@10012002 : Record 99001507;										
+DateTmp@10012003 : Date;										
+Ok@10012004 : Boolean;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//UpdateUnsentWorkShiftRBODD3										
+Ok := TRUE;										
+"EVALUATE(DateTmp,pRetryAction.Key1);"										
+"IF WorkShiftRBO.GET(pRetryAction.""Store No."",DateTmp,pRetryAction.Key2) THEN BEGIN"										
+POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + WorkShiftRBO.TABLECAPTION);										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_WORK_SHIFT') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"IF NOT WebServicesClient.SendWorkShiftRbo(WorkShiftRBO,FALSE,ProcessError,ErrorText) THEN"										
+Ok := FALSE										
+ELSE										
+Ok := TRUE;										
+IF NOT Ok THEN										
+"UpdateTSRetryEntryErrorMessage(pRetryAction,ErrorText);"										
+END ELSE										
+"Ok := pDCUtil3.UpdateWorkShiftRBO(WorkShiftRBO,TRUE);"										
+END;										
+EXIT(Ok);										
+END;										
+										
+PROCEDURE UpdUnsendPosStartStatusDD3@1100409123(VAR pDCUtil3@1100409002 : Codeunit 99008920;pRetryAction@10012000 : Record 99001615)	:	Boo	le	an;						
+VAR										
+PosStartStat@10012002 : Record 99001627;										
+Ok@1100409003 : Boolean;										
+ErrorCode@10012003 : Integer;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//UpdUnsendPosStartStatusDD3										
+"PosStartStat.""Store No."" := BOUtil.SeparateTableKey(1,pRetryAction.Key1);"										
+"EVALUATE(PosStartStat.Type,BOUtil.SeparateTableKey(2,pRetryAction.Key1));"										
+"PosStartStat.ID := BOUtil.SeparateTableKey(3,pRetryAction.Key1);"										
+IF PosStartStat.FIND THEN BEGIN										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_POS_START_STATUS') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+"Ok := WebServicesClient.SendPosStartStatus(PosStartStat,ProcessError,ErrorText);"										
+IF NOT Ok THEN										
+"UpdateTSRetryEntryErrorMessage(pRetryAction,ErrorText);"										
+EXIT(Ok);										
+END ELSE BEGIN										
+EXIT(pDCUtil3.UpdatePosStartStatus(PosStartStat));										
+END;										
+END;										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE UpdateUnsentMemberProcessOrder@1100409035(VAR pRetryAction@1200070001 : Record 99001615) : Boolean;										
+VAR										
+ProcessOrderEntry_l@1200070000 : Record 99009038;										
+Trans@1100409002 : Record 99001472;										
+Ok@1200070002 : Boolean;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//LS7.1-02 - new										
+//UpdateUnsentMemberProcessOrder										
+Ok := TRUE;										
+										
+ProcessOrderEntry_l.RESET;										
+"IF ProcessOrderEntry_l.GET(ProcessOrderEntry_l.""Document Source""::POS,pRetryAction.""Store No."",pRetryAction.""POS Terminal No."",pRe"	try	Act	io	"n."""	"Transaction No."") THEN BEGIN"					
+"//  IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_TRANSACTION') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + ProcessOrderEntry_l.TABLECAPTION);										
+CLEAR(Trans);										
+"Ok :=  WebServicesClient.MemberSendProcessEntry(ProcessOrderEntry_l,ProcessError,ErrorText);"										
+IF NOT Ok THEN										
+"UpdateTSRetryEntryErrorMessage(pRetryAction,ErrorText);"										
+//  END ELSE										
+//   Ok := TRUE										
+END ELSE										
+Ok := TRUE;										
+										
+EXIT(Ok);										
+END;										
+										
+PROCEDURE ProcessTransMemberPoints@1100409039(VAR pRetryAction@1200070001 : Record 99001615) : Boolean;										
+VAR										
+ProcessOrderEntry@1200070000 : Record 99009038;										
+Trans@1100409002 : Record 99001472;										
+Ok@1200070002 : Boolean;										
+ProcessError@1100409001 : Boolean;										
+ErrorText@1100409000 : Text[1024];										
+BEGIN										
+//ProcessTransMemberPoints										
+Ok := TRUE;										
+										
+ProcessOrderEntry.RESET;										
+"ProcessOrderEntry.SETRANGE(""Store No."",pRetryAction.""Store No."");"										
+"ProcessOrderEntry.SETRANGE(""POS Terminal No."",pRetryAction.""POS Terminal No."");"										
+"ProcessOrderEntry.SETRANGE(""Transaction No."",pRetryAction.""Transaction No."");"										
+IF NOT ProcessOrderEntry.ISEMPTY THEN										
+"IF POSFuncProfileWebRequest.WebRequestActive(PosFuncProfile.""Profile ID"",'SEND_TRANSACTION') THEN BEGIN"										
+WebServicesClient.SetPosFuncProfile(PosFuncProfile);										
+POSGUI.ScreenDisplay(_SendingTxt1 + ' ' + ProcessOrderEntry.TABLECAPTION);										
+CLEAR(Trans);										
+"Trans.""Store No."" := pRetryAction.""Store No."";"										
+"Trans.""POS Terminal No."" := pRetryAction.""POS Terminal No."";"										
+"Trans.""Transaction No."" := pRetryAction.""Transaction No."";"										
+"Ok :=  WebServicesClient.ProcessTransMemberPoints(Trans,ProcessError,ErrorText);"										
+IF NOT Ok THEN										
+"UpdateTSRetryEntryErrorMessage(pRetryAction,ErrorText);"										
+END ELSE										
+Ok := TRUE										
+ELSE										
+Ok := TRUE;										
+										
+EXIT(Ok);										
+END;										
+										
+PROCEDURE UpdateTSRetryEntryErrorMessage@1100409037(pRetryEntry@1100409000 : Record 99001615;pErrorText@1100409003 : Text[1024]);										
+BEGIN										
+//UpdateTSRetryEntryErrorMessage										
+										
+"UpdateTSWTErrorMessage(pRetryEntry.Table,pRetryEntry.Key1,pRetryEntry.Key2,"										
+"pRetryEntry.""Store No."",pRetryEntry.""POS Terminal No."",pRetryEntry.""Transaction No."",pErrorText);"										
+END;										
+										
+PROCEDURE UpdateTSWTErrorMessage@1100409009(pTableNo@1000 : Integer;pKey1@1001 : Text[250];pKey2@1200070005 : Text[50];pStoreNo@1100	409	0	:	Co	de[10];pPOSTerminalNo@1100409001 : Code[10];pTransactionNo@1100409002 : Integer;pErrorText@1100409003 : Text[1024]);					
+VAR										
+RetryEntry@1200070001 : Record 99001615;										
+ErrorMessage@1100409004 : Text[250];										
+BEGIN										
+//UpdateTSWTErrorMessage										
+										
+IF STRLEN(pErrorText) > 250 THEN										
+"ErrorMessage := COPYSTR(pErrorText,1,248) + '..'"										
+ELSE										
+ErrorMessage := pErrorText;										
+										
+RetryEntry.RESET;										
+"RetryEntry.SETRANGE(Table,pTableNo);"										
+"RetryEntry.SETRANGE(Key1,pKey1);"										
+"RetryEntry.SETRANGE(Key2,pKey2);"										
+"RetryEntry.SETRANGE(""Store No."",pStoreNo);"										
+"RetryEntry.SETRANGE(""POS Terminal No."",pPOSTerminalNo);"										
+"RetryEntry.SETRANGE(""Transaction No."",pTransactionNo);"										
+IF RetryEntry.FINDFIRST THEN										
+"IF ErrorMessage <> RetryEntry.""Web Error Message"" THEN BEGIN"										
+"RetryEntry.""Web Error Message"" := ErrorMessage;"										
+RetryEntry.MODIFY;										
+END;										
+										
+"Globals.SetValue('TS_ERROR',ErrorMessage);"										
+END;										
+										
+BEGIN										
+{										
+LS7.1-01 EMA #23733# 18.10.2013 - GetPostedTransactionEx added (can get Trans Header with primary key)										
+LS7.1-02 GH  #26777# 06.11.2013 - Send Trans. Point Entries with SEND_TRANSACTION and Member Process Order Entry with Web Service.	Fu	nct	io	n U	pdUnsentLoyaltyPointsTransDD3 removed.					
+"LS7.1-03 GL  #26226# 06.11.2013 - Act on return values in various function calls, perform TS-Floating Cashier and TS POS Cash. Mgm"	t t	oge	th	er.						
+LS7.1-04 GL  #25625# 13.11.2013 - Typo in function name UpddateStaffStatus corrected										
+LS7.1-05 ITG #26908# 18.12.2013 - Store No. valdiation to support Local Inventory on POS and WebService adjustment										
+LS7.1-06 GL  #NAV-719# 09.04.2017 - POS Print Header and POS Print lines sent with transaction										
+LS7.1-07 GL  #NAV-738# 10.04.2014 - Clear POS sending Information after Z-report for Floating Cashier.										
+}										
+END.										
+}										
+}										
+										

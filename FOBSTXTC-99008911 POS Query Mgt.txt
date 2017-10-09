@@ -1,0 +1,115 @@
+OBJECT Codeunit 99008911 POS Query Mgt										
+{										
+OBJECT-PROPERTIES										
+{										
+Date=07/05/14;										
+Time=12:00:00 p.m.;										
+Version List=LSW17.1;										
+}										
+PROPERTIES										
+{										
+OnRun=BEGIN										
+END;										
+										
+}										
+CODE										
+{										
+VAR										
+PeriodicDiscQ@1100409000 : Query 99008900;										
+PeriodicDiscLineQ@1100409001 : Query 99008901;										
+ApplicationMgt@1100409002 : Codeunit 1;										
+										
+PROCEDURE QueryAllowed@1100409003() : Boolean;										
+VAR										
+ApplVersion@1100409000 : Text;										
+BEGIN										
+//QueryAllowed										
+//EXIT(FALSE);										
+ApplVersion := ApplicationMgt.ApplicationVersion;										
+"IF STRPOS(ApplVersion,'7.') > 0 THEN"										
+EXIT(TRUE)										
+ELSE										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE PeriodicDiscOpen@1100409000(VAR pPeriodicDiscParm@1100409000 : Record 99001453);										
+BEGIN										
+//PeriodicDiscOpen										
+										
+CLEAR(PeriodicDiscQ);										
+"PeriodicDiscQ.SETRANGE(Status,pPeriodicDiscParm.Status::Enabled);"										
+"PeriodicDiscQ.SETFILTER(Starting_Date,'%1|<=%2',0D,TODAY);"										
+"PeriodicDiscQ.SETFILTER(Ending_Date,'%1|>=%2',0D,TODAY);"										
+PeriodicDiscQ.OPEN;										
+END;										
+										
+PROCEDURE PeriodicDiscRead@1100409001(VAR pPeriodicDisc@1100409000 : Record 99001453) : Boolean;										
+BEGIN										
+//PeriodicDiscRead										
+										
+IF PeriodicDiscQ.READ THEN BEGIN										
+"pPeriodicDisc.""No."" := PeriodicDiscQ.No;"										
+pPeriodicDisc.Status := PeriodicDiscQ.Status;										
+pPeriodicDisc.Type := PeriodicDiscQ.Type;										
+"pPeriodicDisc.""Validation Period ID"" :=  PeriodicDiscQ.Validation_Period_ID;"										
+"pPeriodicDisc.""Amount to Trigger"" := PeriodicDiscQ.Amount_to_Trigger;"										
+EXIT(TRUE);										
+END ELSE BEGIN										
+CLEAR(pPeriodicDisc);										
+EXIT(FALSE);										
+END;										
+END;										
+										
+PROCEDURE PeriodicDiscClose@1100409002();										
+BEGIN										
+//PeriodicDiscClose										
+										
+PeriodicDiscQ.CLOSE;										
+END;										
+										
+PROCEDURE PeriodicDiscLineOpen@1100409005(VAR pPeriodicDiscLineParm@1100409000 : Record 99001454);										
+BEGIN										
+//PeriodicDiscOpen										
+										
+CLEAR(PeriodicDiscLineQ);										
+"PeriodicDiscLineQ.SETRANGE(PeriodicDiscLineQ.Offer_No,pPeriodicDiscLineParm.""Offer No."");"										
+"IF (pPeriodicDiscLineParm.""No."" <> '') OR (pPeriodicDiscLineParm.Type = pPeriodicDiscLineParm.Type::All) THEN BEGIN"										
+"PeriodicDiscLineQ.SETRANGE(Type,pPeriodicDiscLineParm.Type);"										
+IF pPeriodicDiscLineParm.Type <> pPeriodicDiscLineParm.Type::All THEN										
+"PeriodicDiscLineQ.SETRANGE(No,pPeriodicDiscLineParm.""No."");"										
+END;										
+PeriodicDiscLineQ.OPEN;										
+END;										
+										
+PROCEDURE PeriodicDiscLineRead@1100409007(VAR pPeriodicDiscLine@1100409000 : Record 99001454) : Boolean;										
+BEGIN										
+//PeriodicDiscLineRead										
+										
+IF PeriodicDiscLineQ.READ THEN BEGIN										
+"pPeriodicDiscLine.""Offer No."" := PeriodicDiscLineQ.Offer_No;"										
+"pPeriodicDiscLine.""Line No."" := PeriodicDiscLineQ.Line_No;"										
+pPeriodicDiscLine.Type := PeriodicDiscLineQ.Type;										
+"pPeriodicDiscLine.""No."" := PeriodicDiscLineQ.No;"										
+"pPeriodicDiscLine.""Prompt at Scan"" := PeriodicDiscLineQ.Prompt_at_Scan;"										
+EXIT(TRUE);										
+END ELSE BEGIN										
+CLEAR(pPeriodicDiscLine);										
+EXIT(FALSE);										
+END;										
+END;										
+										
+PROCEDURE PeriodicDiscLineClose@1100409009();										
+BEGIN										
+//PeriodicDiscLineClose										
+										
+PeriodicDiscLineQ.CLOSE;										
+END;										
+										
+BEGIN										
+{										
+LS7.1-01 StK #25699# 26.09.2013 - New Codeunit for query management.										
+}										
+END.										
+}										
+}										
+										

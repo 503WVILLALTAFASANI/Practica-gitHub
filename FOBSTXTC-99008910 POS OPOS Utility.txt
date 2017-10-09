@@ -1,0 +1,371 @@
+OBJECT Codeunit 99008910 POS OPOS Utility										
+{										
+OBJECT-PROPERTIES										
+{										
+Date=08/05/13;										
+Time=12:00:00 p.m.;										
+Version List=LSW17.00.01;										
+}										
+PROPERTIES										
+{										
+SingleInstance=Yes;										
+OnRun=VAR										
+Func@1000 : Integer;										
+BEGIN										
+END;										
+										
+}										
+CODE										
+{										
+VAR										
+"Text023@1122 : TextConst 'ENU=""Unknown Error "";ESP=""Error Desconocido ""';"										
+Text024@1130 : TextConst 'ENU=Unknown OPOS error in module (output): %1;ESP=Error de OPOS desconocido en m¢dulo (salida): %1';										
+Text028@1148 : TextConst 'ENU=KEYBOARD:\Unrecognised Key Name (%1) in %2;ESP=KEYBOARD:\Nombre Clave no reconocido (%1) en %2';										
+Text029@1152 : TextConst 'ENU=KEYBOARD:\Unrecognised Key Name (%1) or (%2) in %3;ESP=KEYBOARD:\Nombre Clave no reconocido (%1) o (	%2)	en	%	3';						
+PosSetup@1000 : Record 99008900;										
+Store@1149 : Record 99001470;										
+PrinterSetup@1173 : ARRAY [6] OF Record 99008900;										
+CRLF@1010 : Text;										
+ESC@1011 : Text[1];										
+Chr@1117 : Char;										
+LastItemNo@1123 : Code[20];										
+LastQty@1124 : Decimal;										
+DisplayErrorCount@1125 : Integer;										
+LastPrice@1159 : Decimal;										
+LastAmount@1160 : Decimal;										
+PosFuncProfile@1162 : Record 99001515;										
+Globals@1163 : Codeunit 99008919;										
+Text030@10012000 : TextConst 'ENU=DCOM Error;ESP=Error DCOM';										
+ExtUtils@10012001 : Codeunit 99001566;										
+lsextutil@1100409005 : Codeunit 99001566;										
+RTCPosControl@1100409007 : Codeunit 10012720;										
+LastErrorTxt@1100409000 : Text[1024];										
+AmountDisplayFormat@1100409004 : Text[80];										
+QtyDisplayFormat@1100409003 : Text[80];										
+PriceDisplayFormat@1100409002 : Text[80];										
+WeightDisplayFormat@1100409001 : Text[80];										
+LCYSymbol@1100409009 : Text[10];										
+Rounding@1100409010 : Decimal;										
+AppMan@1100409008 : Codeunit 1;										
+ProtScale@1100409011 : Codeunit 99001850;										
+DISP_CB_NOBLINK@1100409132 : Integer;										
+										
+PROCEDURE InitDisplay@22() : Boolean;										
+BEGIN										
+//InitDisplay										
+IF PosSetup.Display <> PosSetup.Display::None THEN BEGIN										
+RTCPosControl.ClearLineDisplay();										
+"RTCPosControl.DisplayText('LSRetail', DISP_CB_NOBLINK);"										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE ClearDisplay@1100409009();										
+BEGIN										
+IF PosSetup.Display <> PosSetup.Display::None THEN										
+RTCPosControl.ClearLineDisplay();										
+END;										
+										
+PROCEDURE Display@15(Text1@1000 : Text[50];Text2@1001 : Text[50]) : Boolean;										
+VAR										
+LF@1200070000 : Char;										
+BEGIN										
+//Display										
+IF PosSetup.Display <> PosSetup.Display::None THEN BEGIN										
+										
+"IF NOT RTCPosControl.DisplayTextEx(Text1, Text2, DISP_CB_NOBLINK) THEN"										
+EXIT(FALSE);										
+										
+EXIT(TRUE);										
+END;										
+END;										
+										
+PROCEDURE DisplaySalesLine@19(ItemNo@1000 : Code[20];Description@1001 : Text[100];Qty@1002 : Decimal;Price@1003 : Decimal;Amount@100	4:00	De	ci	mal	;Compressed@1200070000 : Boolean) : Boolean;					
+VAR										
+Line1@1100409000 : Text[30];										
+Line2@1005 : Text[30];										
+AmTxt@1006 : Text[30];										
+Len@1007 : Integer;										
+TL@1008 : Record 99008981;										
+BEGIN										
+//DisplaySalesLine										
+										
+IF PosSetup.Display = PosSetup.Display::None THEN										
+EXIT(TRUE);										
+										
+IF (ItemNo = '') OR (LastItemNo <> ItemNo) OR (Qty < 0) OR (LastPrice <> Price) THEN BEGIN										
+LastQty := 0;										
+LastAmount :=0;										
+END;										
+										
+IF Compressed OR (LastQty < 0) THEN										
+LastQty := 0;										
+IF LastQty = 0 THEN										
+LastAmount := 0;										
+										
+LastItemNo := ItemNo;										
+LastPrice := Price;										
+LastQty := LastQty + Qty;										
+LastAmount := LastAmount + Amount;										
+										
+"Description := COPYSTR(Description,1,20);"										
+										
+IF (Qty <> 1) AND (Qty <> 0) THEN										
+Line2 := ProtScale.FormatQty(Qty) + 'x ' + ProtScale.FormatPrice(LastAmount / Qty)										
+ELSE										
+IF LastQty > 1 THEN										
+Line2 := ProtScale.FormatQty(LastQty) + ' x ' + ProtScale.FormatPrice(LastAmount / LastQty)										
+ELSE										
+Line2 := '';										
+										
+AmTxt := ' ' + ProtScale.FormatAmount(LastAmount);										
+"Len := GetFormattedLength(AmTxt, 20);"										
+"Line2 := PADSTR(Line2,20 - Len) + AmTxt;"										
+"Line1 := PADSTR(Description, 20);"										
+"Display(Line1,Line2);"										
+END;										
+										
+PROCEDURE DisplayScaleLine@60(ItemNo@1000 : Code[20];Description@1001 : Text[100];Weight@1002 : Decimal;Price@1003 : Decimal;Amount@	100	4:00	D	eci	mal;UCode@1005 : Text[10]) : Boolean;					
+VAR										
+DLines@1006 : ARRAY [10] OF Text[20];										
+BEGIN										
+//DisplayScaleLine										
+IF PosSetup.Display = PosSetup.Display::None THEN										
+EXIT(TRUE);										
+										
+"Description := COPYSTR(Description,1,50);"										
+										
+ProtScale.SetDescription(Description);										
+"ProtScale.FormatLines(DLines,Price,Weight,Amount,LOWERCASE(UCode));"										
+										
+"Display(DLines[1],DLines[2]);"										
+END;										
+										
+PROCEDURE DisplayPaymentLine@20(Description@1000 : Text[30];Amount@1001 : Decimal;Balance@1002 : Decimal) : Boolean;										
+VAR										
+AmTxt@1003 : Text[30];										
+Line1@1004 : Text[30];										
+Line2@1005 : Text[30];										
+Len@1006 : Integer;										
+BEGIN										
+//DisplayPaymentLine										
+										
+IF PosSetup.Display = PosSetup.Display::None THEN										
+EXIT(TRUE);										
+										
+LastQty := 0;										
+AmTxt := ProtScale.FormatAmount(Amount);										
+"Len := GetFormattedLength(AmTxt, 20);"										
+Line1 := Description;										
+"Line1 := PADSTR(Line1,20 - Len) + AmTxt;"										
+AmTxt := ProtScale.FormatAmount(Balance);										
+"Len := GetFormattedLength(AmTxt, 20);"										
+"Line2 := PosSetup.""Display Balance Text"";"										
+"Line2 := PADSTR(Line2,20 - Len) + AmTxt;"										
+										
+"Display(Line1,Line2);"										
+END;										
+										
+PROCEDURE DisplayTotals@21(Total@1000 : Decimal;Balance@1001 : Decimal) : Boolean;										
+VAR										
+AmTxt@1002 : Text[30];										
+Len@1003 : Integer;										
+Line1@1004 : Text[30];										
+Line2@1005 : Text[30];										
+BEGIN										
+//DisplayTotals										
+										
+IF PosSetup.Display = PosSetup.Display::None THEN										
+EXIT(TRUE);										
+										
+LastQty := 0;										
+AmTxt := ProtScale.FormatAmount(Total);										
+"Len := GetFormattedLength(AmTxt, 20);"										
+"Line1 := PosSetup.""Display Total Text"";"										
+"Line1 := PADSTR(Line1,20 - Len) + AmTxt;"										
+AmTxt := ProtScale.FormatAmount(Balance);										
+"Len := GetFormattedLength(AmTxt, 20);"										
+"Line2 := PosSetup.""Display Balance Text"";"										
+"Line2 := PADSTR(Line2,20 - Len) + AmTxt;"										
+										
+"Display(Line1,Line2);"										
+END;										
+										
+PROCEDURE DisplayCurrency@34(Balance@1000 : Decimal;BalanceInCurr@1001 : Decimal;CurrencyCode@1002 : Text[10]);										
+VAR										
+AmTxt@1003 : Text[30];										
+Len@1004 : Integer;										
+Line1@1005 : Text[30];										
+Line2@1006 : Text[30];										
+BEGIN										
+//DisplayTotals										
+										
+IF PosSetup.Display = PosSetup.Display::None THEN										
+EXIT;										
+										
+LastQty := 0;										
+AmTxt := ProtScale.FormatAmount(Balance);										
+"Len := GetFormattedLength(AmTxt, 20);"										
+"Line1 := PosSetup.""Display Balance Text"";"										
+"Line1 := PADSTR(Line1,20 - Len) + AmTxt;"										
+AmTxt := ProtScale.FormatAmount(BalanceInCurr);										
+"Len := GetFormattedLength(AmTxt, 20);"										
+Line2 := CurrencyCode ;										
+"Line2 := PADSTR(Line2,20 - Len) + AmTxt;"										
+										
+"Display(Line1,Line2);"										
+END;										
+										
+PROCEDURE DisplayScrollTxt@4() : Boolean;										
+BEGIN										
+IF PosSetup.Display <> PosSetup.Display::OPOS THEN										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE OpenDrawer@2() : Boolean;										
+BEGIN										
+//OpenDrawer										
+IF PosSetup.Drawer = PosSetup.Drawer::None THEN										
+EXIT(TRUE);										
+										
+EXIT(RTCPosControl.OpenDrawer());										
+END;										
+										
+PROCEDURE IsDrawerOpen@3() : Boolean;										
+BEGIN										
+//IsDrawerOpen										
+IF PosSetup.Drawer = PosSetup.Drawer::None THEN										
+EXIT(FALSE);										
+										
+EXIT(RTCPosControl.IsDrawerOpen());										
+END;										
+										
+PROCEDURE Beeper@30() : Boolean;										
+VAR										
+NoOfCycles@1000 : Integer;										
+InterSoundWait@1001 : Integer;										
+BEGIN										
+//Beeper										
+"IF (PosSetup.""Tone1 Pitch"" <> 0) AND (PosSetup.""Tone1 Duration"" <> 0) THEN BEGIN"										
+RTCPosControl.SoundImmediate();										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE InitOpos@51(ProfileID@1000 : Code[10]);										
+VAR										
+KeyCommand@1002 : Record 99008902;										
+KeyMapping@1003 : Record 99008903;										
+BEGIN										
+//InitOpos										
+PosSetup.GET(ProfileID);										
+"PosSetup.""MSR Autodisable"" := FALSE; // Temporary FIX"										
+										
+DISP_CB_NOBLINK := 0;										
+										
+Chr := 13; CRLF := FORMAT(Chr); Chr := 10; CRLF := CRLF + FORMAT(Chr);										
+Chr := 27; ESC := FORMAT(Chr);										
+										
+PosFuncProfile.GET(Globals.FunctionalityProfileID);										
+END;										
+										
+PROCEDURE EnableScanner@41() : Boolean;										
+BEGIN										
+//EnableScanner										
+IF PosSetup.Scanner = PosSetup.Scanner::None THEN										
+EXIT(TRUE);										
+										
+EXIT(RTCPosControl.EnableScanner);										
+END;										
+										
+PROCEDURE DisableScanner@40();										
+BEGIN										
+//DisableScanner										
+IF PosSetup.Scanner = PosSetup.Scanner::None THEN										
+EXIT;										
+										
+RTCPosControl.DisableScanner;										
+END;										
+										
+PROCEDURE InitScale@1100409001() : Boolean;										
+BEGIN										
+IF PosSetup.Scale = PosSetup.Scale::None THEN										
+EXIT(TRUE)										
+ELSE IF PosSetup.Scale = PosSetup.Scale::OPOS THEN										
+IF NOT ProtScale.InitScale() THEN										
+EXIT(FALSE);										
+"EXIT(ProtScale.InitFormat(Globals.GetValue('CURRSYM'), PosFuncProfile.""Amount Rounding to"", Globals.StoreNo));"										
+END;										
+										
+PROCEDURE GetScaleVersion@1100409002() : Text;										
+BEGIN										
+IF PosSetup.Scale = PosSetup.Scale::None THEN										
+EXIT('')										
+ELSE IF PosSetup.Scale = PosSetup.Scale::Virtual THEN										
+EXIT('LS Retail Virtual Scale')										
+ELSE										
+EXIT(ProtScale.GetVersionString());										
+END;										
+										
+PROCEDURE GetScaleChecksum@1100409004() : Decimal;										
+BEGIN										
+IF PosSetup.Scale = PosSetup.Scale::None THEN										
+EXIT(0)										
+ELSE IF PosSetup.Scale = PosSetup.Scale::Virtual THEN										
+EXIT(0)										
+ELSE										
+EXIT(ProtScale.GetCheckSum());										
+END;										
+										
+PROCEDURE ScaleWeigh@62(Description@1000 : Text[30];UnitPrice@1001 : Decimal;TareWeight@1002 : Decimal;UnitOfMeasure@1003 : Text[10]	;VA	R W	ei	ght	@1004 : Decimal;VAR SalesPrice@1005 : Decimal;VAR Displayed@1006 : Boolean) : Boolean;					
+VAR										
+Ok@1007 : Boolean;										
+DisplayOK@1100409000 : Boolean;										
+IWeight@1100409001 : Integer;										
+BEGIN										
+//ScaleWeigh										
+IF PosSetup.Scale = PosSetup.Scale::None THEN										
+EXIT(FALSE)										
+ELSE IF PosSetup.Scale = PosSetup.Scale::Virtual THEN BEGIN										
+"Ok := (RTCPosControl.ReadScaleWeight(IWeight, 0, ProtScale.GetWeightUnitOfMeasure, Description, UnitPrice, TareWeight, SalesPric"	e))	;								
+Weight := IWeight / 1000.0;										
+DisplayOK := RTCPosControl.ClearLineDisplay();										
+"DisplayScaleLine('',Description,Weight,UnitPrice,SalesPrice,UnitOfMeasure);"										
+EXIT(Ok);										
+END										
+ELSE BEGIN //OPOS										
+ProtScale.SetUnitPrice(UnitPrice);										
+ProtScale.SetTareWeight(TareWeight);										
+ProtScale.SetDescription(Description);										
+IF ProtScale.ScaleWeigh THEN BEGIN										
+Weight := ProtScale.GetWeight;										
+SalesPrice := ProtScale.GetSalesPrice;										
+//Displayed := ProtScale.GetDisplayUsed;										
+EXIT(TRUE);										
+END;										
+END;										
+										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE GetFormattedLength@1100409000(VAR Text@1100409000 : Text[30];MaxLength@1100409001 : Integer) RetLength : Integer;										
+BEGIN										
+RetLength := STRLEN(Text);										
+IF RetLength > MaxLength THEN BEGIN										
+"Text := COPYSTR(Text, 1, MaxLength);"										
+RetLength := MaxLength;										
+END;										
+END;										
+										
+PROCEDURE GetErrorTxt@1100409003() : Text[1024];										
+BEGIN										
+EXIT(LastErrorTxt);										
+END;										
+										
+BEGIN										
+END.										
+}										
+}										
+										

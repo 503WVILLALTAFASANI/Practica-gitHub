@@ -1,0 +1,1521 @@
+OBJECT Codeunit 99008904 POS Order Connection										
+{										
+OBJECT-PROPERTIES										
+{										
+Date=07/05/14;										
+Time=12:00:00 p.m.;										
+Version List=LSW17.1;										
+}										
+PROPERTIES										
+{										
+OnRun=BEGIN										
+END;										
+										
+}										
+CODE										
+{										
+VAR										
+Text001@1200000000 : TextConst 'ENU=Transaction must be empty (new);ESP=La transacci¢n debe estar vac¡a (nuevo)';										
+Text002@1200000001 : TextConst 'ENU=Store not found for location %1;ESP=Tienda no encontrada para la localizaci¢n %1';										
+PostOrder@1000000002 : Codeunit 80;										
+Helper@1200070000 : Codeunit 10000705;										
+PosPriceUtility@1200070001 : Codeunit 99008906;										
+Globals@1200070002 : Codeunit 99008919;										
+ItemJnlPostLine@1200070003 : Codeunit 22;										
+DimManagement@1200070004 : Codeunit 408;										
+Text031@1200070005 : TextConst 'ENU=%1 %2 does not exist in %3.;ESP=%1 %2 no existe en %3.';										
+ItemPostingBuffer@1200070006 : TEMPORARY Record 99001455;										
+RelSalesDoc@1200070007 : Codeunit 414;										
+RetailItemTracking@1100409000 : Codeunit 10001415;										
+DiscLedgerMgt@1100409001 : Codeunit 99001569;										
+PosFunc@1100409002 : Codeunit 99008900;										
+										
+PROCEDURE UpdateSHSL@1200070000(pReceiptNo@1200070000 : Code[20];DocumentType@1100409000 : Integer);										
+VAR										
+xPosTransaction@1200000000 : Record 99008980;										
+xPosTransLine@1200070005 : Record 99008981;										
+xSalesHeader@1200070001 : Record 36;										
+xSalesHeader2@1200070003 : Record 36;										
+xSalesLine@1200070002 : Record 37;										
+xSalesLine2@1200070004 : Record 37;										
+PosTransInfocodeEntry@1000000002 : Record 99008982;										
+ItemLedgerEntry@1000000003 : Record 32;										
+LastEntry@1000000000 : Integer;										
+xNewOrder@1200070006 : Boolean;										
+IncomeExpenseAccount@1100409001 : Record 99001476;										
+SalesTypes@1200070007 : Record 10001439;										
+BEGIN										
+//UpdateSHSL										
+xPosTransaction.GET(pReceiptNo);										
+										
+"IF xPosTransaction.""Document No."" = '' THEN"										
+BEGIN										
+xSalesHeader.INIT();										
+"xSalesHeader.""Document Type"" := DocumentType;"										
+"xSalesHeader.""No."" := '';"										
+"xSalesHeader.""External Document No."" := pReceiptNo;"										
+xSalesHeader.INSERT(TRUE);										
+"xPosTransaction.""Document No."" := xSalesHeader.""No."";"										
+xPosTransaction.MODIFY();										
+xNewOrder := TRUE;										
+END										
+ELSE										
+BEGIN										
+"xSalesHeader.GET(DocumentType,xPosTransaction.""Document No."");"										
+xNewOrder := FALSE;										
+END;										
+										
+RelSalesDoc.Reopen(xSalesHeader);										
+										
+"TransPosToSH(xPosTransaction,xSalesHeader2);"										
+										
+xSalesHeader.SetHideValidationDialog(TRUE);										
+"IF xSalesHeader.""Posting Date"" <> xSalesHeader2.""Posting Date"" THEN"										
+"xSalesHeader.VALIDATE(xSalesHeader.""Posting Date"",xSalesHeader2.""Posting Date"");"										
+"IF xSalesHeader.""Sell-to Customer No."" <> xSalesHeader2.""Sell-to Customer No."" THEN"										
+"xSalesHeader.VALIDATE(xSalesHeader.""Sell-to Customer No."",xSalesHeader2.""Sell-to Customer No."");"										
+"IF xSalesHeader.""VAT Bus. Posting Group"" <> xSalesHeader2.""VAT Bus. Posting Group"" THEN"										
+"xSalesHeader.VALIDATE(xSalesHeader.""VAT Bus. Posting Group"",xSalesHeader2.""VAT Bus. Posting Group"");"										
+"IF xSalesHeader.""Location Code"" <> xSalesHeader2.""Location Code"" THEN"										
+"xSalesHeader.VALIDATE(xSalesHeader.""Location Code"",xSalesHeader2.""Location Code"");"										
+										
+"IF (xSalesHeader.""Shortcut Dimension 1 Code"" <> xSalesHeader2.""Shortcut Dimension 1 Code"") AND (xNewOrder) THEN"										
+"xSalesHeader.VALIDATE(xSalesHeader.""Shortcut Dimension 1 Code"",xSalesHeader2.""Shortcut Dimension 1 Code"");"										
+"IF (xSalesHeader.""Shortcut Dimension 2 Code"" <> xSalesHeader2.""Shortcut Dimension 2 Code"") AND (xNewOrder) THEN"										
+"xSalesHeader.VALIDATE(xSalesHeader.""Shortcut Dimension 2 Code"",xSalesHeader2.""Shortcut Dimension 2 Code"");"										
+										
+"IF xSalesHeader.""Currency Code"" <> xSalesHeader2.""Currency Code"" THEN"										
+"xSalesHeader.VALIDATE(xSalesHeader.""Currency Code"",xSalesHeader2.""Currency Code"");"										
+										
+"xSalesHeader.""Sales Type""    := xPosTransaction.""Sales Type"";"										
+"xSalesHeader.""POS Comment""   := xPosTransaction.Comment;"										
+"IF SalesTypes.GET(xSalesHeader.""Sales Type"") THEN BEGIN"										
+"IF SalesTypes.""New Global Dimension 2"" <> '' THEN"										
+"xSalesHeader.VALIDATE(""Shortcut Dimension 2 Code"",SalesTypes.""New Global Dimension 2"");"										
+END;										
+										
+xSalesHeader.MODIFY();										
+										
+xPosTransLine.RESET();										
+"xPosTransLine.SETRANGE(xPosTransLine.""Receipt No."",xPosTransaction.""Receipt No."");"										
+"xPosTransLine.SETFILTER(""Entry Type"",'%1|%2',xPosTransLine.""Entry Type""::Item,"										
+"xPosTransLine.""Entry Type""::IncomeExpense);"										
+IF xPosTransLine.FIND('-') THEN										
+REPEAT;										
+CLEAR(xSalesLine);										
+"IF xPosTransLine.""Entry Status"" = xPosTransLine.""Entry Status""::Voided THEN"										
+BEGIN										
+"IF xSalesLine.GET(xSalesHeader.""Document Type"",xSalesHeader.""No."",xPosTransLine.""Line No."") THEN"										
+xSalesLine.DELETE();										
+END										
+ELSE										
+BEGIN										
+"IF NOT xSalesLine.GET(xSalesHeader.""Document Type"",xSalesHeader.""No."",xPosTransLine.""Line No."") THEN"										
+BEGIN										
+xSalesLine.INIT();										
+"xSalesLine.""Document Type"" := xSalesHeader.""Document Type"";"										
+"xSalesLine.""Document No."" := xSalesHeader.""No."";"										
+"xSalesLine.""Line No."" := xPosTransLine.""Line No."";"										
+xSalesLine.INSERT();										
+END;										
+										
+"TransPosToSL(xSalesHeader,xPosTransLine,xSalesLine2);"										
+										
+"IF xSalesLine.""Sell-to Customer No."" <> xSalesHeader.""Sell-to Customer No."" THEN"										
+"xSalesLine.""Sell-to Customer No."" := xSalesHeader.""Sell-to Customer No."";"										
+"IF xPosTransLine.""Entry Type"" = xPosTransLine.""Entry Type""::IncomeExpense THEN BEGIN"										
+"IncomeExpenseAccount.GET(xPosTransLine.""Store No."",xPosTransLine.Number);"										
+"xSalesLine2.Type := xSalesLine2.Type::""G/L Account"";"										
+"xSalesLine2.""No."" := IncomeExpenseAccount.""G/L Account"";"										
+xSalesLine2.Quantity := 1;										
+"xSalesLine2.""Unit Price"" := xPosTransLine.Amount;"										
+END										
+ELSE										
+xSalesLine2.Type := xSalesLine2.Type::Item;										
+"IF (xSalesLine.""No."" <> xSalesLine2.""No."") OR (xSalesLine.Type <> xSalesLine2.Type) THEN BEGIN"										
+xSalesLine.Type := xSalesLine2.Type;										
+"xSalesLine.VALIDATE(xSalesLine.""No."",xSalesLine2.""No."");"										
+END;										
+"IF xSalesLine.""Variant Code"" <> xSalesLine2.""Variant Code"" THEN"										
+"xSalesLine.VALIDATE(xSalesLine.""Variant Code"",xSalesLine2.""Variant Code"");"										
+										
+"xSalesLine.""Attached to Line No."" := xSalesLine2.""Attached to Line No."";"										
+										
+"IF (xSalesLine.""Unit of Measure Code"" <>  xSalesLine2.""Unit of Measure Code"") AND"										
+"(xSalesLine2.""Unit of Measure Code"" <> '') THEN"										
+"xSalesLine.VALIDATE(xSalesLine.""Unit of Measure Code"",xSalesLine2.""Unit of Measure Code"");"										
+										
+"IF xSalesLine.""Location Code"" <> xSalesLine2.""Location Code"" THEN"										
+"xSalesLine.VALIDATE(xSalesLine.""Location Code"",xSalesLine2.""Location Code"");"										
+										
+"IF (xPosTransLine.""Serial No."" <> '') OR (xPosTransLine.""Lot No."" <> '') THEN"										
+"DeleteReservEntries(DATABASE::""Sales Line"",xSalesHeader.""Document Type"",xSalesHeader.""No."",xSalesLine.""Line No."");"										
+										
+IF xSalesLine.Quantity <> xSalesLine2.Quantity THEN										
+"xSalesLine.VALIDATE(xSalesLine.Quantity,xSalesLine2.Quantity);"										
+"IF (xPosTransLine.""Entry Type"" = xPosTransLine.""Entry Type""::IncomeExpense) AND"										
+"(NOT xSalesHeader.""Prices Including VAT"") THEN"										
+"xSalesLine2.""Unit Price"" := ROUND(xSalesLine2.""Unit Price"" / (1 + xSalesLine.""VAT %""/100),0.00001);"										
+"IF xSalesLine.""Unit Price"" <> xSalesLine2.""Unit Price"" THEN"										
+"xSalesLine.VALIDATE(xSalesLine.""Unit Price"",xSalesLine2.""Unit Price"");"										
+"IF xSalesLine.""Line Discount %"" <> xSalesLine2.""Line Discount %"" THEN"										
+"xSalesLine.VALIDATE(xSalesLine.""Line Discount %"",xSalesLine2.""Line Discount %"");"										
+										
+"IF (xSalesLine.""Shortcut Dimension 1 Code"" <> xSalesLine2.""Shortcut Dimension 1 Code"") AND (xNewOrder) THEN"										
+"xSalesLine.VALIDATE(xSalesLine.""Shortcut Dimension 1 Code"",xSalesLine2.""Shortcut Dimension 1 Code"");"										
+"IF (xSalesLine.""Shortcut Dimension 2 Code"" <> xSalesLine2.""Shortcut Dimension 2 Code"") AND (xNewOrder) THEN"										
+"xSalesLine.VALIDATE(xSalesLine.""Shortcut Dimension 2 Code"",xSalesLine2.""Shortcut Dimension 2 Code"");"										
+										
+"IF xSalesLine.""Offer No."" <> xSalesLine2.""Offer No."" THEN"										
+"xSalesLine.""Offer No."" := xSalesLine2.""Offer No."";"										
+"IF xSalesLine.""Promotion No."" <> xSalesLine2.""Promotion No."" THEN"										
+"xSalesLine.""Promotion No."" := xSalesLine2.""Promotion No."";"										
+										
+"IF xPosTransLine.""Entry Type"" = xPosTransLine.""Entry Type""::IncomeExpense THEN"										
+xSalesLine.Description := xPosTransLine.Description;										
+										
+"IF xPosTransLine.""Serial No."" <> '' THEN"										
+"AddSalesLineSerialNoTracking(xSalesHeader,xSalesLine,xPosTransLine.""Serial No."",xPosTransLine.""Expiration Date"");"										
+										
+"IF xPosTransLine.""Lot No."" <> '' THEN"										
+"AddSalesLineLotNoTracking(xSalesHeader,xSalesLine,xPosTransLine.""Lot No."",xPosTransLine.""Expiration Date"");"										
+										
+"IF SalesTypes.""Purchasing Code"" <> '' THEN"										
+"xSalesLine.VALIDATE(""Purchasing Code"",SalesTypes.""Purchasing Code"");"										
+										
+xSalesLine.MODIFY();										
+END;										
+UNTIL xPosTransLine.NEXT() = 0;										
+										
+COMMIT;										
+										
+"IF xSalesHeader.""Sales Type"" <> '' THEN"										
+BEGIN										
+										
+xSalesHeader.SETRECFILTER();										
+										
+"CASE SalesTypes.""Suspend Printing"" OF"										
+"0: IF xSalesHeader.""Document Type"" = xSalesHeader.""Document Type""::Quote THEN"										
+"REPORT.RUNMODAL(204,FALSE,FALSE,xSalesHeader)"										
+ELSE										
+"REPORT.RUNMODAL(205,FALSE,FALSE,xSalesHeader);"										
+										
+"2: IF SalesTypes.""Report ID"" <> 0 THEN"										
+"REPORT.RUNMODAL(SalesTypes.""Report ID"",FALSE,FALSE,xSalesHeader);"										
+										
+END;										
+										
+END;										
+END;										
+										
+LOCAL PROCEDURE TransPosToSH@1200070002(VAR pPosTransaction@1200070001 : Record 99008980;VAR pSalesHeader@1200070000 : Record 36);										
+VAR										
+xStore@1200000000 : Record 99001470;										
+xPosFuncProfile@1200070002 : Record 99001515;										
+BEGIN										
+//TransPosToSH										
+"xStore.GET(pPosTransaction.""Store No."");"										
+"xPosFuncProfile.GET(xStore.""Functionality Profile"");"										
+										
+"xStore.GET(pPosTransaction.""Store No."");"										
+"IF pPosTransaction.""Original Date"" <> TODAY THEN BEGIN"										
+"pPosTransaction.""Trans. Date"" := TODAY;"										
+"pPosTransaction.""Original Date"" := pPosTransaction.""Trans. Date"";"										
+"pPosTransaction.""Trans Time"" := TIME;"										
+"IF (xStore.""Store Open After Midnight"") AND (pPosTransaction.""Trans Time"" <= xStore.""Store Open to"") THEN"										
+"pPosTransaction.""Trans. Date"" := CALCDATE('<-1D>',pPosTransaction.""Trans. Date"");"										
+END;										
+										
+"pSalesHeader.""Posting Date"" := pPosTransaction.""Trans. Date"";"										
+										
+"IF pPosTransaction.""Customer No."" <> '' THEN"										
+BEGIN										
+"pSalesHeader.""Sell-to Customer No."" := pPosTransaction.""Customer No."";"										
+END										
+ELSE										
+BEGIN										
+"pSalesHeader.""Sell-to Customer No."" := xPosFuncProfile.""Cash Customer"";"										
+END;										
+										
+"pSalesHeader.""Location Code"" := xStore.""Location Code"";"										
+"pSalesHeader.""Shortcut Dimension 1 Code"" := xStore.""Global Dimension 1 Code"";"										
+"pSalesHeader.""Shortcut Dimension 2 Code"" := xStore.""Global Dimension 2 Code"";"										
+										
+"pSalesHeader.""Currency Code"" := pPosTransaction.""Trans. Currency Code"";"										
+										
+"pSalesHeader.""VAT Bus. Posting Group"" := pPosTransaction.""VAT Bus.Posting Group"";"										
+END;										
+										
+LOCAL PROCEDURE TransPosToSL@1200070003(VAR pSalesHeader@1200000000 : Record 36;VAR pPosTransLine@1200070001 : Record 99008981;VAR p	Sal	esL	in	e@1	200070000 : Record 37);					
+VAR										
+xStore@1200070002 : Record 99001470;										
+PerDiscType@1100409000 : Record 99008943;										
+BEGIN										
+//TransPosToSL										
+"pSalesLine.""No."" := pPosTransLine.Number;"										
+"pSalesLine.""Variant Code"" := pPosTransLine.""Variant Code"";"										
+"pSalesLine.""Unit of Measure Code"" := pPosTransLine.""Unit of Measure"";"										
+"IF pSalesHeader.""Prices Including VAT"" THEN"										
+"pSalesLine.""Unit Price"" := pPosTransLine.Price"										
+ELSE										
+"pSalesLine.""Unit Price"" := pPosTransLine.""Net Price"";"										
+pSalesLine.Quantity := pPosTransLine.Quantity;										
+"pSalesLine.""Line Discount %"" := pPosTransLine.""Discount %"";"										
+"PosPriceUtility.GetPerDiscLine(PerDiscType,pPosTransLine);"										
+"pSalesLine.""Offer No."" := PerDiscType.""Periodic Disc. Group"";"										
+"IF pSalesLine.""Offer No."" <> '' THEN BEGIN"										
+"PosPriceUtility.GetTransDisc(pPosTransLine,FALSE,PerDiscType.DiscType::""Periodic Disc."");"										
+"pSalesLine.""Line Discount %"" := pPosTransLine.""Periodic Disc. %"";"										
+END;										
+"pSalesLine.""Promotion No."" := pPosTransLine.""Promotion No."";"										
+"pSalesLine.""Location Code"" := pSalesHeader.""Location Code"";"										
+"pSalesLine.""Shortcut Dimension 1 Code"" := pSalesHeader.""Shortcut Dimension 1 Code"";"										
+"pSalesLine.""Shortcut Dimension 2 Code"" := pSalesHeader.""Shortcut Dimension 2 Code"";"										
+"IF pPosTransLine.""Line No."" <>  pPosTransLine.""Parent Line"" THEN"										
+"pSalesLine.""Attached to Line No."" := pPosTransLine.""Parent Line"""										
+ELSE										
+"pSalesLine.""Attached to Line No."" := 0;"										
+END;										
+										
+PROCEDURE GetSHSL@1200000000(pReceiptNo@1200000007 : Code[20];pDocNo@1200000008 : Code[20];DocType@1200070000 : Integer);										
+VAR										
+xPosTransaction@1200000000 : Record 99008980;										
+xPosTransaction2@1200000001 : Record 99008980;										
+xPosTransLine@1200000005 : Record 99008981;										
+xPosTransLine2@1200000003 : Record 99008981;										
+xSalesHeader@1200000004 : Record 36;										
+xSalesLine@1200000002 : Record 37;										
+IncomeExpenseAccount@1100409000 : Record 99001476;										
+xTempTrackingSpec@1100409001 : TEMPORARY Record 336;										
+PerDiscType@1100409002 : Record 99008943;										
+PosTransDiscTemp@1100409003 : TEMPORARY Record 99008943;										
+BEGIN										
+//GetSHSL										
+xPosTransaction.GET(pReceiptNo);										
+										
+"IF xPosTransaction.""Document No."" <> '' THEN"										
+ERROR(Text001);										
+										
+xPosTransLine.RESET();										
+"xPosTransLine.SETRANGE(xPosTransLine.""Receipt No."",xPosTransaction.""Receipt No."");"										
+IF NOT xPosTransLine.ISEMPTY() THEN										
+ERROR(Text001);										
+										
+"xSalesHeader.GET(DocType,pDocNo);"										
+										
+SerialLotSplitSalesLines(xSalesHeader);										
+										
+RelSalesDoc.RUN(xSalesHeader);										
+										
+"xPosTransaction2.""Store No."" := xPosTransaction.""Store No."";"										
+"TransSHToPos(xSalesHeader,xPosTransaction2);"										
+										
+"xPosTransaction.""New Transaction"" := FALSE;"										
+"xPosTransaction.""Document No."" := pDocNo;"										
+"xPosTransaction.""Transaction Type"" := xPosTransaction.""Transaction Type""::Sales;"										
+"xPosTransaction.""Trans. Date"" := xPosTransaction2.""Trans. Date"";"										
+"xPosTransaction.""Trans Time"" := xPosTransaction2.""Trans Time"";"										
+"xPosTransaction.""Original Date"" := xPosTransaction2.""Original Date"";"										
+										
+"IF xPosTransaction.""Customer No."" <> xPosTransaction2.""Customer No."" THEN"										
+"xPosTransaction.VALIDATE(xPosTransaction.""Customer No."",xPosTransaction2.""Customer No."");"										
+"IF xPosTransaction.""VAT Bus.Posting Group"" <> xPosTransaction2.""VAT Bus.Posting Group"" THEN"										
+"xPosTransaction.VALIDATE(xPosTransaction.""VAT Bus.Posting Group"",xPosTransaction2.""VAT Bus.Posting Group"");"										
+"IF xPosTransaction.""Trans. Currency Code"" <> xPosTransaction2.""Trans. Currency Code""  THEN"										
+"xPosTransaction.VALIDATE(xPosTransaction.""Trans. Currency Code"",xPosTransaction2.""Trans. Currency Code"");"										
+										
+"IF xPosTransaction.""Sales Type"" <> xPosTransaction2.""Sales Type"" THEN"										
+"xPosTransaction.""Sales Type"" := xPosTransaction2.""Sales Type"";"										
+IF xPosTransaction.Comment <> xPosTransaction2.Comment THEN										
+xPosTransaction.Comment := xPosTransaction2.Comment;										
+										
+xPosTransaction.MODIFY();										
+										
+xSalesLine.RESET();										
+"xSalesLine.SETRANGE(xSalesLine.""Document Type"",DocType);"										
+"xSalesLine.SETRANGE(xSalesLine.""Document No."",xSalesHeader.""No."");"										
+"xSalesLine.SETFILTER(Type,'%1|%2',xSalesLine.Type::Item,"										
+"xSalesLine.Type::""G/L Account"");"										
+IF xSalesLine.FIND('-') THEN										
+REPEAT;										
+PosTransDiscTemp.RESET;										
+PosTransDiscTemp.DELETEALL;										
+"TransSLToPos(xSalesHeader,xSalesLine,xPosTransLine2,PosTransDiscTemp);"										
+										
+xPosTransLine.INIT();										
+"xPosTransLine.""Receipt No."" := xPosTransaction.""Receipt No."";"										
+"xPosTransLine.""Store No."" := xPosTransaction.""Store No."";"										
+"xPosTransLine.""POS Terminal No."" := xPosTransaction.""POS Terminal No."";"										
+"xPosTransLine.""Line No."" := xPosTransLine2.""Line No."";"										
+"xPosTransLine.""Parent Line"" := xPosTransLine2.""Parent Line"";"										
+"IF xSalesLine.Type = xSalesLine.Type::""G/L Account"" THEN BEGIN"										
+IncomeExpenseAccount.RESET;										
+"IncomeExpenseAccount.SETRANGE(""Store No."",xPosTransaction.""Store No."");"										
+"IncomeExpenseAccount.SETRANGE(""G/L Account"",xSalesLine.""No."");"										
+IF xSalesLine.Amount > 0 THEN										
+"IncomeExpenseAccount.SETRANGE(""Account Type"",IncomeExpenseAccount.""Account Type""::Income)"										
+ELSE										
+"IncomeExpenseAccount.SETRANGE(""Account Type"",IncomeExpenseAccount.""Account Type""::Expense);"										
+IF NOT IncomeExpenseAccount.FIND('-') THEN BEGIN										
+"IncomeExpenseAccount.SETRANGE(""Account Type"");"										
+IncomeExpenseAccount.FIND('-');										
+END;										
+"xPosTransLine.""Entry Type"" := xPosTransLine.""Entry Type""::IncomeExpense;"										
+"xPosTransLine.VALIDATE(Number,IncomeExpenseAccount.""No."");"										
+xPosTransLine.Description := xSalesLine.Description;										
+END										
+ELSE BEGIN										
+"xPosTransLine.""Entry Type"" := xPosTransLine.""Entry Type""::Item;"										
+"xPosTransLine.VALIDATE(Number,xPosTransLine2.Number);"										
+END;										
+"xPosTransLine.""Variant Code"" := xPosTransLine2.""Variant Code"";"										
+"xPosTransLine.""Unit of Measure"" := xPosTransLine2.""Unit of Measure"";"										
+xPosTransLine.INSERT();										
+PosTransDiscTemp.RESET;										
+IF PosTransDiscTemp.FIND('-') THEN										
+REPEAT										
+"PosPriceUtility.InsertTransDiscPercent(xPosTransLine,PosTransDiscTemp.""Discount %"","										
+"PosTransDiscTemp.DiscType,PosTransDiscTemp.""Offer No."");"										
+UNTIL PosTransDiscTemp.NEXT = 0;										
+"xPosTransLine.VALIDATE(xPosTransLine.Price,xPosTransLine2.Price);"										
+"xPosTransLine.VALIDATE(xPosTransLine.Quantity,xPosTransLine2.Quantity);"										
+xTempTrackingSpec.RESET;										
+xTempTrackingSpec.DELETEALL;										
+"FindReservEntries(xTempTrackingSpec,DATABASE::""Sales Line"","										
+"xSalesLine.""Document Type"",xSalesLine.""Document No."",'',0,xSalesLine.""Line No."");"										
+xTempTrackingSpec.RESET;										
+IF xTempTrackingSpec.FIND('-') THEN BEGIN										
+"xPosTransLine.""Serial No."" := xTempTrackingSpec.""Serial No."";"										
+"xPosTransLine.""Lot No."" := xTempTrackingSpec.""Lot No."";"										
+"xPosTransLine.""Expiration Date"" := xTempTrackingSpec.""Expiration Date"";"										
+END;										
+xPosTransLine.MODIFY();										
+UNTIL xSalesLine.NEXT() = 0;										
+END;										
+										
+LOCAL PROCEDURE TransSHToPos@1200000002(VAR pSalesHeader@1200000000 : Record 36;VAR pPosTransaction@1200000001 : Record 99008980);										
+VAR										
+xStore@1200070001 : Record 99001470;										
+xPosFuncProfile@1200070000 : Record 99001515;										
+BEGIN										
+//TransSHtoPos										
+"xStore.GET(pPosTransaction.""Store No."");"										
+"xPosFuncProfile.GET(xStore.""Functionality Profile"");"										
+										
+"pPosTransaction.""Trans. Date"" := TODAY();"										
+"pPosTransaction.""Original Date"" := pPosTransaction.""Trans. Date"";"										
+"pPosTransaction.""Trans Time"" := TIME();"										
+"IF (xStore.""Store Open After Midnight"") AND (pPosTransaction.""Trans Time"" <= xStore.""Store Open to"") THEN"										
+"pPosTransaction.""Trans. Date"" := CALCDATE('<-1D>',pPosTransaction.""Trans. Date"");"										
+										
+"IF pSalesHeader.""Sell-to Customer No."" = xPosFuncProfile.""Cash Customer"" THEN"										
+"pPosTransaction.""Customer No."" := ''"										
+ELSE										
+"pPosTransaction.""Customer No."" := pSalesHeader.""Sell-to Customer No."";"										
+										
+"pPosTransaction.""Trans. Currency Code"" := pSalesHeader.""Currency Code"";"										
+										
+"pPosTransaction.""Sales Type"" := pSalesHeader.""Sales Type"";"										
+"pPosTransaction.Comment      := pSalesHeader.""POS Comment"";"										
+										
+"pPosTransaction.""VAT Bus.Posting Group"" := pSalesHeader.""VAT Bus. Posting Group"";"										
+END;										
+										
+LOCAL PROCEDURE TransSLToPos@1200000003(VAR pSalesHeader@1200000002 : Record 36;VAR pSalesLine@1200000000 : Record 37;VAR pPOSTransL	ine	@12	0	0	001 : Record 99008981;VAR pPosTransDisc@1100409002 : Record 99008943);					
+VAR										
+xStore@1200070000 : Record 99001470;										
+PerDiscType@1100409000 : Record 99008943;										
+PeriodicDisc@1100409001 : Record 99001453;										
+Index@1100409003 : Integer;										
+BEGIN										
+//TransSLToPos										
+"pPOSTransLine.""Line No."" := pSalesLine.""Line No."";"										
+"pPOSTransLine.Number := pSalesLine.""No."";"										
+"pPOSTransLine.""Variant Code"" := pSalesLine.""Variant Code"";"										
+"pPOSTransLine.""Unit of Measure"" := pSalesLine.""Unit of Measure Code"";"										
+"IF pSalesHeader.""Prices Including VAT"" THEN"										
+"pPOSTransLine.Price := pSalesLine.""Unit Price"""										
+ELSE										
+"pPOSTransLine.Price := ROUND(pSalesLine.""Unit Price"" * (1 + pSalesLine.""VAT %""/100),0.00001);"										
+pPOSTransLine.Quantity := pSalesLine.Quantity;										
+										
+Index := 0;										
+"IF (pSalesLine.""Line Discount %"" <> 0) OR (pSalesLine.""Offer No."" <> '') OR (pSalesLine.""Promotion No."" <> '') THEN BEGIN"										
+"IF pSalesLine.""Promotion No."" <> '' THEN BEGIN"										
+Index := Index  + 1;										
+pPosTransDisc.INIT;										
+"pPosTransDisc.""No."" := Index;"										
+pPosTransDisc.DiscType := pPosTransDisc.DiscType::Promotion;										
+"pPosTransDisc.""Offer No."" := pSalesLine.""Promotion No."";"										
+pPosTransDisc.INSERT;										
+END;										
+"IF pSalesLine.""Offer No."" <> '' THEN BEGIN"										
+"IF PeriodicDisc.GET(pSalesLine.""Offer No."") THEN BEGIN"										
+PeriodicDisc.Type := 0;										
+CASE PeriodicDisc.Type OF										
+PeriodicDisc.Type::Multibuy:										
+"PerDiscType.""Periodic Disc. Type"" := PerDiscType.""Periodic Disc. Type""::Multibuy;"										
+"PeriodicDisc.Type::""Mix&Match"":"										
+"PerDiscType.""Periodic Disc. Type"" := PerDiscType.""Periodic Disc. Type""::""Mix&Match"";"										
+"PeriodicDisc.Type::""Disc. Offer"":"										
+"PerDiscType.""Periodic Disc. Type"" := PerDiscType.""Periodic Disc. Type""::""Disc. Offer"";"										
+END;										
+"IF PerDiscType.""Periodic Disc. Type"" <> 0 THEN BEGIN"										
+Index := Index  + 1;										
+pPosTransDisc.INIT;										
+"pPosTransDisc.""No."" := Index;"										
+"pPosTransDisc.DiscType := pPosTransDisc.DiscType::""Periodic Disc."";"										
+"pPosTransDisc.""Offer No."" := pSalesLine.""Offer No."";"										
+"pPosTransDisc.""Periodic Disc. Type"" := PerDiscType.""Periodic Disc. Type"";"										
+"pPosTransDisc.""Discount %"" := pSalesLine.""Line Discount %"";"										
+pPosTransDisc.INSERT;										
+"pSalesLine.""Line Discount %"" := 0;"										
+END;										
+END;										
+END;										
+"IF pSalesLine.""Line Discount %"" <> 0 THEN BEGIN"										
+Index := Index  + 1;										
+pPosTransDisc.INIT;										
+"pPosTransDisc.""No."" := Index;"										
+pPosTransDisc.DiscType := pPosTransDisc.DiscType::Line;										
+"pPosTransDisc.""Discount %"" := pSalesLine.""Line Discount %"";"										
+pPosTransDisc.INSERT;										
+"pSalesLine.""Line Discount %"" := 0;"										
+END;										
+END;										
+"IF pSalesLine.""Attached to Line No."" <> 0 THEN"										
+"pPOSTransLine.""Parent Line"" := pSalesLine.""Attached to Line No."""										
+ELSE										
+"pPOSTransLine.""Parent Line"" := pSalesLine.""Line No."";"										
+END;										
+										
+PROCEDURE PostSH@1200070001(pReceiptNo@1200070000 : Code[20]);										
+VAR										
+xPOSTransaction@1200070003 : Record 99008980;										
+xSalesHeader@1200070001 : Record 36;										
+BEGIN										
+//PostSH										
+xPOSTransaction.GET(pReceiptNo);										
+										
+"IF xPOSTransaction.""Document No."" <> '' THEN"										
+BEGIN										
+"xSalesHeader.GET(xSalesHeader.""Document Type""::Order,xPOSTransaction.""Document No."");"										
+xSalesHeader.Ship := TRUE;										
+xSalesHeader.Invoice := FALSE;										
+"xSalesHeader.""Not Show Dialog"" := TRUE;"										
+PostOrder.RUN(xSalesHeader);										
+END;										
+END;										
+										
+PROCEDURE DeleteSH@1200070005(pReceiptNo@1200070000 : Code[20]);										
+VAR										
+xPOSTransaction@1200070003 : Record 99008980;										
+xSalesHeader@1200070001 : Record 36;										
+xSalesLine@1200070002 : Record 37;										
+xSalesLineReserve@1200070004 : Codeunit 99000832;										
+BEGIN										
+//DeleteSH										
+xPOSTransaction.GET(pReceiptNo);										
+										
+"IF xPOSTransaction.""Document No."" <> '' THEN"										
+BEGIN										
+"IF xSalesHeader.GET(xSalesHeader.""Document Type""::Order,xPOSTransaction.""Document No."") THEN BEGIN"										
+xSalesLine.RESET();										
+"xSalesLine.SETRANGE(xSalesLine.""Document Type"",xSalesHeader.""Document Type"");"										
+"xSalesLine.SETRANGE(xSalesLine.""Document No."",xSalesHeader.""No."");"										
+IF xSalesLine.FIND('-') THEN										
+REPEAT;										
+xSalesLineReserve.SetDeleteItemTracking(TRUE);										
+xSalesLineReserve.DeleteLine(xSalesLine);										
+xSalesLine.DELETE();										
+UNTIL xSalesLine.NEXT() = 0;										
+xSalesHeader.DELETE();										
+END;										
+END;										
+END;										
+										
+PROCEDURE CalcOffersSH@1200070004(pDocNo@1200070004 : Code[20];pDocType@1200070006 : Integer);										
+VAR										
+xSalesHeader@1200070000 : Record 36;										
+xPosTrans@1200070001 : Record 99008980;										
+xStore@1200070002 : Record 99001470;										
+xPosTerminal@1200070005 : Record 99001471;										
+xStaff@1200070003 : Record 99001461;										
+xPOSTransLine@1200070007 : Record 99008981;										
+BEGIN										
+//CalcOffersSH										
+"IF NOT xSalesHeader.GET(pDocType,pDocNo) THEN"										
+EXIT;										
+										
+"xSalesHeader.TESTFIELD(xSalesHeader.""Location Code"");"										
+										
+"IF xStore.FindStore(xSalesHeader.""Location Code"",xStore) THEN"										
+"Globals.SetStore(xStore.""No."")"										
+ELSE										
+Globals.SetStore('');										
+										
+"xPosTerminal.SETRANGE(xPosTerminal.""Store No."",Globals.StoreNo);"										
+IF NOT xPosTerminal.FIND('-') THEN										
+CLEAR(xPosTerminal);										
+"Globals.SetTerminal(xPosTerminal.""No."");"										
+										
+IF NOT xStaff.FIND('-') THEN										
+CLEAR(xStaff);										
+Globals.SetStaff(xStaff.ID);										
+										
+xPosTrans.INIT();										
+"xPosTrans.""Receipt No."" := COPYSTR(Helper.LeftPadStr(xSalesHeader.""No."",20,'0'),11,10);"										
+"xPosTrans.""Transaction Type"" := xPosTrans.""Transaction Type""::Sales;"										
+"xPosTrans.""Trans. Date"" := xSalesHeader.""Posting Date"";"										
+"xPosTrans.""VAT Bus.Posting Group"" := xSalesHeader.""VAT Bus. Posting Group"";"										
+"xPosTrans.""Price Group Code"" := xSalesHeader.""Customer Price Group"";"										
+"xPosTrans.""Store No."" := Globals.StoreNo;"										
+"xPosTrans.""Customer No."" := xSalesHeader.""Sell-to Customer No."";"										
+"xPosTrans.""Customer Disc. Group"" := xSalesHeader.""Customer Disc. Group""; //LS7.1-01"										
+"xPosTrans.VALIDATE(xPosTrans.""Trans. Currency Code"",xSalesHeader.""Currency Code"");"										
+xPosTrans.INSERT();										
+										
+PosFunc.LoadOfferTables(TRUE);										
+										
+"GetSHSL(xPosTrans.""Receipt No."",xSalesHeader.""No."",pDocType);"										
+										
+xPOSTransLine.RESET();										
+"xPOSTransLine.SETRANGE(xPOSTransLine.""Receipt No."",xPosTrans.""Receipt No."");"										
+"xPOSTransLine.SETRANGE(xPOSTransLine.""Entry Type"",xPOSTransLine.""Entry Type""::Item);"										
+IF xPOSTransLine.FIND('-') THEN										
+REPEAT;										
+"PosPriceUtility.CalcPrice(xPOSTransLine,TRUE);"										
+xPOSTransLine.MODIFY();										
+UNTIL xPOSTransLine.NEXT() = 0;										
+										
+PosPriceUtility.CalcPeriodicOnTotalPressed(xPosTrans);										
+										
+"UpdateSHSL(xPosTrans.""Receipt No."",pDocType);"										
+										
+"xPosTrans.GET(xPosTrans.""Receipt No."");"										
+xPosTrans.DELETE(TRUE);										
+END;										
+										
+PROCEDURE PostItemInventory@1200070007(VAR pTransaction@1200070000 : Record 99001472);										
+VAR										
+xStore@1200070004 : Record 99001470;										
+xCustomerRec@1200070001 : Record 18;										
+xTransSalesEntry@1200070002 : Record 99001473;										
+xTransactionStatus@1200070003 : Record 99001493;										
+xDocNumber@1200070005 : Code[20];										
+PostItemSales@1100409000 : Boolean;										
+BEGIN										
+//PostItemInventory										
+"IF pTransaction.""Transaction Type"" <> pTransaction.""Transaction Type""::Sales THEN"										
+EXIT;										
+"IF pTransaction.""Entry Status"" IN[pTransaction.""Entry Status""::Voided,pTransaction.""Entry Status""::Training] THEN"										
+EXIT;										
+										
+ItemPostingBuffer.RESET();										
+ItemPostingBuffer.DELETEALL();										
+CLEAR(DiscLedgerMgt);										
+										
+"CreateTransStatus(pTransaction,xTransactionStatus);"										
+"xStore.GET(pTransaction.""Store No."");"										
+										
+"IF pTransaction.""To Account"" THEN BEGIN"										
+"IF NOT xCustomerRec.GET(pTransaction.""Customer No."") THEN"										
+ERROR(										
+"Text031,"										
+"pTransaction.FIELDCAPTION(""Customer No.""),pTransaction.""Customer No."",xCustomerRec.TABLECAPTION);"										
+"xTransSalesEntry.SETRANGE(""Store No."",pTransaction.""Store No."");"										
+"xTransSalesEntry.SETRANGE(""POS Terminal No."",pTransaction.""POS Terminal No."");"										
+"xTransSalesEntry.SETRANGE(""Transaction No."",pTransaction.""Transaction No."");"										
+"IF pTransaction.""Post as Shipment"" THEN"										
+"MakeOrder(xStore,xCustomerRec,pTransaction,xTransSalesEntry)"										
+ELSE BEGIN										
+IF xTransSalesEntry.FIND('-') THEN REPEAT										
+"xDocNumber := CreateDocNo(xTransSalesEntry.""Store No."",xTransSalesEntry.""POS Terminal No."","										
+"xTransSalesEntry.""Transaction No."");"										
+PostItemSales := TRUE;										
+"IF (xTransSalesEntry.""Serial No."" <> '') AND"										
+(xTransSalesEntry.Quantity = -1) THEN										
+"PostItemSales := IsSerialNoValid(xTransSalesEntry.""Item No."","										
+"xTransSalesEntry.""Variant Code"","										
+"xStore.""Location Code"","										
+"xTransSalesEntry.""Serial No."");"										
+IF PostItemSales THEN BEGIN										
+"ProcessItemSales(xStore,xDocNumber,pTransaction,xTransSalesEntry);"										
+CreateTransSalesEntryStatus(xTransSalesEntry);										
+END;										
+UNTIL xTransSalesEntry.NEXT = 0;										
+END;										
+END ELSE BEGIN										
+"xTransSalesEntry.SETRANGE(""Store No."",pTransaction.""Store No."");"										
+"xTransSalesEntry.SETRANGE(""POS Terminal No."",pTransaction.""POS Terminal No."");"										
+"xTransSalesEntry.SETRANGE(""Transaction No."",pTransaction.""Transaction No."");"										
+IF xTransSalesEntry.FIND('-') THEN REPEAT										
+"xDocNumber := CreateDocNo(xTransSalesEntry.""Store No."",xTransSalesEntry.""POS Terminal No."","										
+"xTransSalesEntry.""Transaction No."");"										
+PostItemSales := TRUE;										
+"IF (xTransSalesEntry.""Serial No."" <> '') AND"										
+(xTransSalesEntry.Quantity = -1) THEN										
+"PostItemSales := IsSerialNoValid(xTransSalesEntry.""Item No."","										
+"xTransSalesEntry.""Variant Code"","										
+"xStore.""Location Code"","										
+"xTransSalesEntry.""Serial No."");"										
+IF PostItemSales THEN BEGIN										
+"ProcessItemSales(xStore,xDocNumber,pTransaction,xTransSalesEntry);"										
+CreateTransSalesEntryStatus(xTransSalesEntry);										
+END;										
+UNTIL xTransSalesEntry.NEXT = 0;										
+END;										
+										
+PostItemPostingBuffer(ItemPostingBuffer);										
+END;										
+										
+LOCAL PROCEDURE CreateTransStatus@1200070012(VAR pTransaction@1200070000 : Record 99001472;VAR pTransactionStatus@1200070001 : Recor	d 9	900	14	93)	;					
+BEGIN										
+//CreateTransStatus										
+pTransactionStatus.INIT();										
+"pTransactionStatus.""Store No."" := pTransaction.""Store No."";"										
+"pTransactionStatus.""POS Terminal No."" := pTransaction.""POS Terminal No."";"										
+"pTransactionStatus.""Transaction No."" := pTransaction.""Transaction No."";"										
+"pTransactionStatus.Status := pTransactionStatus.Status::""Items Posted"";"										
+pTransactionStatus.Date := pTransaction.Date;										
+										
+"pTransactionStatus.""Customer No."" := pTransaction.""Customer No."";"										
+"pTransactionStatus.""Amount to Account"" := pTransaction.""Amount to Account"";"										
+										
+pTransactionStatus.INSERT(TRUE);										
+END;										
+										
+LOCAL PROCEDURE CreateTransSalesEntryStatus@1200070013(VAR pTransSalesEntry@1200070001 : Record 99001473);										
+VAR										
+xTransSalesEntryStatus@1200070002 : Record 99001494;										
+BEGIN										
+//CreateTransSalesEntryStatus										
+xTransSalesEntryStatus.INIT();										
+"xTransSalesEntryStatus.""Store No."" := pTransSalesEntry.""Store No."";"										
+"xTransSalesEntryStatus.""POS Terminal No."" := pTransSalesEntry.""POS Terminal No."";"										
+"xTransSalesEntryStatus.""Transaction No."" := pTransSalesEntry.""Transaction No."";"										
+"xTransSalesEntryStatus.""Line No."" := pTransSalesEntry.""Line No."";"										
+"xTransSalesEntryStatus.Status := xTransSalesEntryStatus.Status::""Items Posted"";"										
+"xTransSalesEntryStatus.""Item No."" := pTransSalesEntry.""Item No."";"										
+"xTransSalesEntryStatus.""Variant Code"" := pTransSalesEntry.""Variant Code"";"										
+xTransSalesEntryStatus.Quantity := pTransSalesEntry.Quantity;										
+xTransSalesEntryStatus.Date := pTransSalesEntry.Date;										
+"xTransSalesEntryStatus.""Serial No."" := pTransSalesEntry.""Serial No."";"										
+"xTransSalesEntryStatus.""Lot No."" := pTransSalesEntry.""Lot No."";"										
+xTransSalesEntryStatus.INSERT(TRUE);										
+END;										
+										
+LOCAL PROCEDURE MakeOrder@1200070008(VAR pStore@1200070010 : Record 99001470;VAR pCustomerRec@1200070000 : Record 18;VAR pTransactio	n@1	200	7	0	5 : Record 99001472;VAR pTransSalesEntry@1200070001 : Record 99001473);					
+VAR										
+xLSRetailSetup@1200070012 : Record 10000700;										
+xSalesHeader@1200070009 : Record 36;										
+xSalesLine@1200070008 : Record 37;										
+xSalesShpHdr@1200070007 : Record 110;										
+xBlockedCust@1200070006 : Record 18;										
+xTempItemUnblocking@1200070004 : Boolean;										
+xTempCustUnblocking@1200070003 : Boolean;										
+xTempUnReserve@1200070013 : Boolean;										
+xTotalAmountPayed@1200070002 : Decimal;										
+xItem@1200070011 : Record 27;										
+LineNo@1200070014 : Integer;										
+xStore@1200070015 : Record 99001470;										
+xSalesTypes@1200070016 : Record 10001439;										
+xDocumentNo@10012000 : Code[20];										
+BEGIN										
+//MakeOrder										
+xLSRetailSetup.GET();										
+										
+IF pTransSalesEntry.FIND('-') THEN BEGIN										
+										
+"IF (pCustomerRec.Blocked <> pCustomerRec.Blocked::"" "") THEN BEGIN // temporarily unblocked"										
+xBlockedCust.Blocked := pCustomerRec.Blocked;										
+"pCustomerRec.Blocked := pCustomerRec.Blocked::"" "";"										
+pCustomerRec.MODIFY;										
+xTempCustUnblocking := TRUE;										
+END;										
+										
+"xDocumentNo := CreateDocNo(pTransaction.""Store No."",pTransaction.""POS Terminal No."",pTransaction.""Transaction No."");"										
+										
+xSalesHeader.INIT;										
+"xSalesHeader.""Document Type"" := xSalesHeader.""Document Type""::Order;"										
+"xSalesHeader.VALIDATE(""Posting Date"",pTransaction.Date);"										
+"xSalesHeader.VALIDATE(""Sell-to Customer No."",pTransaction.""Customer No."");"										
+IF NOT xSalesHeader.INSERT(TRUE) THEN BEGIN										
+"xSalesHeader.VALIDATE(""No."",xDocumentNo);"										
+xSalesHeader.INSERT(TRUE);										
+END;										
+"xSalesHeader.""External Document No."" := xDocumentNo;"										
+"xSalesHeader.VALIDATE(""Location Code"",pStore.""Location Code"");"										
+"xSalesHeader.VALIDATE(""Shortcut Dimension 1 Code"",pStore.""Global Dimension 1 Code"");"										
+										
+"IF xSalesTypes.GET(pTransaction.""Sales Type"") THEN BEGIN"										
+"IF xSalesTypes.""New Global Dimension 2"" <> '' THEN"										
+"xSalesHeader.VALIDATE(""Shortcut Dimension 2 Code"",xSalesTypes.""New Global Dimension 2"")"										
+ELSE										
+"xSalesHeader.VALIDATE(""Shortcut Dimension 2 Code"",pStore.""Global Dimension 2 Code"");"										
+END ELSE										
+"xSalesHeader.VALIDATE(""Shortcut Dimension 2 Code"",pStore.""Global Dimension 2 Code"");"										
+										
+"xSalesHeader.""Prices Including VAT"" := TRUE;"										
+xSalesHeader.Invoice := FALSE;										
+xSalesHeader.Ship := TRUE;										
+"xSalesHeader.""Statement No."" :=  xDocumentNo;"										
+"IF xSalesHeader.""Currency Code"" <> pTransaction.""Trans. Currency"" THEN"										
+"xSalesHeader.VALIDATE(""Currency Code"",pTransaction.""Trans. Currency"");"										
+xSalesHeader.MODIFY;										
+										
+REPEAT										
+"xItem.GET(pTransSalesEntry.""Item No."");"										
+IF xItem.Blocked THEN BEGIN // temporarily unblocked										
+xItem.Blocked := FALSE;										
+xItem.MODIFY;										
+xTempItemUnblocking := TRUE;										
+END;										
+										
+"IF xLSRetailSetup.""Post Always Reserve Items"" AND (xItem.Reserve = xItem.Reserve::Always) THEN BEGIN"										
+xItem.Reserve := xItem.Reserve::Never;										
+xItem.MODIFY;										
+xTempUnReserve := TRUE;										
+END;										
+										
+CLEAR(xSalesLine);										
+"xSalesLine.""Document Type"" := xSalesHeader.""Document Type"";"										
+"xSalesLine.""Document No."" := xSalesHeader.""No."";"										
+LineNo += 10000;										
+"xSalesLine.""Line No."" := LineNo;"										
+xSalesLine.INSERT(TRUE);										
+xSalesLine.Type := xSalesLine.Type::Item;										
+"xSalesLine.VALIDATE(""No."",pTransSalesEntry.""Item No."");"										
+"xSalesLine.""Cross-Reference No."" := pTransSalesEntry.""Barcode No."";"										
+"xSalesLine.VALIDATE(""Variant Code"",pTransSalesEntry.""Variant Code"");"										
+"xSalesLine.VALIDATE(""Location Code"",pStore.""Location Code"");"										
+"IF pTransSalesEntry.""Unit of Measure"" <> '' THEN"										
+"xSalesLine.VALIDATE(""Unit of Measure Code"",pTransSalesEntry.""Unit of Measure"")"										
+ELSE										
+"xSalesLine.VALIDATE(""Unit of Measure Code"",'');"										
+"IF pTransSalesEntry.""UOM Quantity"" <> 0 THEN BEGIN"										
+"xSalesLine.VALIDATE(Quantity,-pTransSalesEntry.""UOM Quantity"");"										
+"xSalesLine.VALIDATE(""Unit Price"",pTransSalesEntry.Price * pTransSalesEntry.Quantity / pTransSalesEntry.""UOM Quantity"");"										
+"xSalesLine.VALIDATE(""Unit Cost"",pTransSalesEntry.""Cost Amount"" / -pTransSalesEntry.""UOM Quantity"");"										
+END ELSE BEGIN										
+"xSalesLine.VALIDATE(Quantity,-pTransSalesEntry.Quantity);"										
+"xSalesLine.VALIDATE(""Unit Price"",pTransSalesEntry.Price);"										
+"xSalesLine.VALIDATE(""Unit Cost"",pTransSalesEntry.""Cost Amount"" / -pTransSalesEntry.Quantity);"										
+END;										
+"xSalesLine.VALIDATE(""Line Discount Amount"",pTransSalesEntry.""Discount Amount"");"										
+"xSalesLine.VALIDATE(""Inv. Discount Amount"",pTransSalesEntry.""Total Discount"");"										
+"xSalesLine.""Offer No."" := pTransSalesEntry.""Periodic Disc. Group"";"										
+"xSalesLine.""Promotion No."" := pTransSalesEntry.""Promotion No."";"										
+										
+"IF pTransSalesEntry.""Serial No."" <> '' THEN"										
+"AddSalesLineSerialNoTracking(xSalesHeader,xSalesLine,pTransSalesEntry.""Serial No."",pTransSalesEntry.""Expiration Date"");"										
+										
+"IF pTransSalesEntry.""Lot No."" <> '' THEN"										
+"AddSalesLineLotNoTracking(xSalesHeader,xSalesLine,pTransSalesEntry.""Lot No."",pTransSalesEntry.""Expiration Date"");"										
+xSalesLine.MODIFY(TRUE);										
+										
+"InsertSalesLineDiscEntry(pTransSalesEntry,xSalesLine);"										
+										
+IF xTempItemUnblocking THEN BEGIN										
+"xItem.GET(xItem.""No."");"										
+xItem.Blocked := TRUE;										
+xItem.MODIFY;										
+xTempItemUnblocking := FALSE;										
+END;										
+										
+IF xTempUnReserve THEN BEGIN										
+"xItem.GET(xItem.""No."");"										
+xItem.Reserve := xItem.Reserve::Always;										
+xItem.MODIFY;										
+xTempUnReserve := FALSE;										
+END;										
+CreateTransSalesEntryStatus(pTransSalesEntry);										
+UNTIL pTransSalesEntry.NEXT = 0;										
+										
+CLEAR(PostOrder);										
+PostOrder.SetStatement;										
+PostOrder.RUN(xSalesHeader);										
+										
+IF xTempCustUnblocking THEN BEGIN										
+"pCustomerRec.GET(pCustomerRec.""No."");"										
+pCustomerRec.Blocked := xBlockedCust.Blocked;										
+pCustomerRec.MODIFY;										
+xTempCustUnblocking := FALSE;										
+END;										
+END;										
+END;										
+										
+LOCAL PROCEDURE ProcessItemSales@1200070009(VAR pStore@1200070003 : Record 99001470;pDocNumber@1200070000 : Code[20];VAR pTransactio	n@1	200	7	0	5 : Record 99001472;VAR pTransSalesEntry@1200070002 : Record 99001473);					
+VAR										
+xItem@1200070009 : Record 27;										
+xItemPostingBuffer@1200070001 : Record 99001455;										
+xVATPostingSetup@1200070010 : Record 325;										
+xVATFactor@1200070004 : Decimal;										
+xCurrencyExchRate@1200070007 : Record 330;										
+xCurrencyFactor@1200070006 : Decimal;										
+xStaff@1200070008 : Record 99001461;										
+BEGIN										
+//ProcessItemSales										
+"xItem.GET(pTransSalesEntry.""Item No."");"										
+CLEAR(xItemPostingBuffer);										
+"xVATPostingSetup.GET(pTransaction.""VAT Bus.Posting Group"",xItem.""VAT Prod. Posting Group"");"										
+"xVATFactor := (1 + (xVATPostingSetup.""VAT %"" / 100));"										
+										
+xItemPostingBuffer.Type := xItemPostingBuffer.Type::Sales;										
+"xItemPostingBuffer.""Serial No."" := pTransSalesEntry.""Serial No."";"										
+"xItemPostingBuffer.""Lot No."" := pTransSalesEntry.""Lot No."";"										
+"xItemPostingBuffer.""Expiration Date"" := pTransSalesEntry.""Expiration Date"";"										
+"xItemPostingBuffer.""Item No."" := pTransSalesEntry.""Item No."";"										
+"xItemPostingBuffer.""Location Code"" := pStore.""Location Code"";"										
+"xItemPostingBuffer.""Department Code"" := pStore.""Global Dimension 1 Code"";"										
+"xItemPostingBuffer.""Document No."" := pDocNumber;"										
+xItemPostingBuffer.Quantity := -pTransSalesEntry.Quantity;										
+"xItemPostingBuffer.""Neg. Qty"" := xItemPostingBuffer.Quantity <= 0;"										
+"xItemPostingBuffer.Amount := -pTransSalesEntry.""Net Amount"";"										
+"xItemPostingBuffer.""Cost Amount"" := -pTransSalesEntry.""Cost Amount"";"										
+"xItemPostingBuffer.""Offer No."" := pTransSalesEntry.""Periodic Disc. Group"";"										
+"xItemPostingBuffer.""Sales Type"" := pTransaction.""Sales Type"";"										
+"xItemPostingBuffer.""Promotion No."" := pTransSalesEntry.""Promotion No."";"										
+"xItemPostingBuffer.""Inv. Discount Amount"" := ROUND(pTransSalesEntry.""Discount Amount"" / xVATFactor);"										
+										
+"CreateDiscBuffer(pTransSalesEntry,xVATFactor);"										
+										
+"IF pTransSalesEntry.""Variant Code"" <> '' THEN"										
+"xItemPostingBuffer.""Source No."" := pTransSalesEntry.""Variant Code"";"										
+"IF pTransaction.""To Account"" THEN"										
+"xItemPostingBuffer.""Customer No."" := pTransaction.""Customer No."";"										
+										
+xItemPostingBuffer.Date := pTransSalesEntry.Date;										
+										
+"IF pTransaction.""Trans. Currency"" <> '' THEN BEGIN"										
+"xCurrencyFactor := xCurrencyExchRate.ExchangeRate(xItemPostingBuffer.Date,pTransaction.""Trans. Currency"");"										
+xItemPostingBuffer.Amount :=										
+ROUND(xCurrencyExchRate.ExchangeAmtFCYToLCY(										
+"xItemPostingBuffer.Date,pTransaction.""Trans. Currency"",xItemPostingBuffer.Amount,xCurrencyFactor));"										
+"xItemPostingBuffer.""Cost Amount"" :="										
+ROUND(xCurrencyExchRate.ExchangeAmtFCYToLCY(										
+"xItemPostingBuffer.Date,pTransaction.""Trans. Currency"",xItemPostingBuffer.""Cost Amount"",xCurrencyFactor));"										
+"xItemPostingBuffer.""Inv. Discount Amount"" :="										
+ROUND(xCurrencyExchRate.ExchangeAmtFCYToLCY(										
+"xItemPostingBuffer.Date,pTransaction.""Trans. Currency"",xItemPostingBuffer.""Inv. Discount Amount"",xCurrencyFactor));"										
+"xItemPostingBuffer.""Line Discount Amount"" :="										
+ROUND(xCurrencyExchRate.ExchangeAmtFCYToLCY(										
+"xItemPostingBuffer.Date,pTransaction.""Trans. Currency"",xItemPostingBuffer.""Line Discount Amount"",xCurrencyFactor));"										
+"DiscLedgerMgt.ExchFCYToLCYCurrDiscBuffer(xItemPostingBuffer.Date,pTransaction.""Trans. Currency"",xCurrencyFactor);"										
+END;										
+										
+"IF (pTransSalesEntry.""Sales Staff"" <> '') AND xStaff.GET(pTransSalesEntry.""Sales Staff"") AND (xStaff.""Sales Person"" <> '') THEN"										
+"xItemPostingBuffer.""Salesperson Code"" := xStaff.""Sales Person"";"										
+										
+"xItem.CALCFIELDS(""Assembly BOM"");"										
+"IF xItem.""Assembly BOM"" THEN BEGIN"										
+END;										
+										
+UpdItemPostingBuffer(xItemPostingBuffer);										
+END;										
+										
+PROCEDURE UpdItemPostingBuffer@1200070016(VAR pItemPostingBuffer@1200070000 : Record 99001455);										
+VAR										
+DiscBuffer@1100409001 : TEMPORARY Record 99001659;										
+NextEntryNo@1100409000 : Integer;										
+BEGIN										
+//UpdItemPostingBuffer										
+ItemPostingBuffer := pItemPostingBuffer;										
+IF ItemPostingBuffer.FIND('=') THEN										
+BEGIN										
+ItemPostingBuffer.Quantity := ItemPostingBuffer.Quantity + pItemPostingBuffer.Quantity;										
+ItemPostingBuffer.Amount := ItemPostingBuffer.Amount + pItemPostingBuffer.Amount;										
+"ItemPostingBuffer.""Cost Amount"" := ItemPostingBuffer.""Cost Amount"" + pItemPostingBuffer.""Cost Amount"";"										
+"ItemPostingBuffer.""Line Discount Amount"" := ItemPostingBuffer.""Line Discount Amount"" +"										
+"pItemPostingBuffer.""Line Discount Amount"";"										
+"ItemPostingBuffer.""Inv. Discount Amount"" := ItemPostingBuffer.""Inv. Discount Amount"" +"										
+"pItemPostingBuffer.""Inv. Discount Amount"";"										
+ItemPostingBuffer.MODIFY;										
+DiscLedgerMgt.GetCurrDiscBuffer(DiscBuffer);										
+"DiscLedgerMgt.UpdateDiscBuffer(ItemPostingBuffer.""Discount Entry No."",DiscBuffer);"										
+END										
+ELSE										
+BEGIN										
+ItemPostingBuffer.INIT();										
+ItemPostingBuffer := pItemPostingBuffer;										
+NextEntryNo := DiscLedgerMgt.GetNextEntryNo;										
+"ItemPostingBuffer.""Discount Entry No."" := NextEntryNo;"										
+ItemPostingBuffer.INSERT;										
+DiscLedgerMgt.GetCurrDiscBuffer(DiscBuffer);										
+"DiscLedgerMgt.UpdateDiscBuffer(ItemPostingBuffer.""Discount Entry No."",DiscBuffer);"										
+END;										
+END;										
+										
+PROCEDURE PostItemPostingBuffer@1200070015(VAR pItemPostingBuffer@1200070000 : Record 99001455);										
+VAR										
+xLSRetailSetup@1200070002 : Record 10000700;										
+xStore@1200070001 : Record 99001470;										
+BEGIN										
+//PostItemPostingBuffer										
+xLSRetailSetup.GET();										
+										
+pItemPostingBuffer.RESET();										
+IF pItemPostingBuffer.FIND('-') THEN										
+REPEAT										
+"IF NOT xStore.FindStore(pItemPostingBuffer.""Location Code"",xStore) THEN"										
+"ERROR(Text002,pItemPostingBuffer.""Location Code"");"										
+"PostItemPostingBufferRec(xLSRetailSetup,xStore,pItemPostingBuffer);"										
+UNTIL pItemPostingBuffer.NEXT() = 0;										
+END;										
+										
+LOCAL PROCEDURE PostItemPostingBufferRec@1200070006(VAR pLSRetailSetup@1200070011 : Record 10000700;VAR pStore@1200070010 : Record 9	900	147	0;	VAR	pItemPostingBuffer@1200070000 : Record 99001455);					
+VAR										
+xItem@1200070001 : Record 27;										
+xTempUnblocking@1200070002 : Boolean;										
+xTempUnReserve@1200070004 : Boolean;										
+xItemJnlLine@1200070005 : Record 83;										
+i@1200070006 : Integer;										
+xTableID@1200070008 : ARRAY [10] OF Integer;										
+xNo@1200070007 : ARRAY [10] OF Code[20];										
+ReservationEntry@1100409000 : Record 337;										
+LastReservationEntryLine@1100409001 : Integer;										
+DiscBuffer@1100409002 : TEMPORARY Record 99001659;										
+xSalesTypes@1100409003 : Record 10001439;										
+BEGIN										
+//PostItemPostingBufferRec										
+IF (pItemPostingBuffer.Quantity <> 0) THEN BEGIN										
+"xItem.GET(pItemPostingBuffer.""Item No."");"										
+xTempUnblocking := FALSE;										
+"IF NOT xItem.""No Stock Posting"" THEN BEGIN"										
+IF xItem.Blocked THEN BEGIN // temporarily unblocked										
+xItem.Blocked := FALSE;										
+xItem.MODIFY;										
+xTempUnblocking := TRUE;										
+END;										
+										
+"IF pLSRetailSetup.""Post Always Reserve Items"" AND (xItem.Reserve = xItem.Reserve::Always) THEN BEGIN"										
+xItem.Reserve := xItem.Reserve::Never;										
+xItem.MODIFY;										
+xTempUnReserve := TRUE;										
+END;										
+										
+CLEAR(xItemJnlLine);										
+xItemJnlLine.INIT;										
+"xItemJnlLine.""Item No."" := pItemPostingBuffer.""Item No."";"										
+"xItemJnlLine.""Variant Code"" := pItemPostingBuffer.""Source No."";"										
+"xItemJnlLine.""Posting Date"" := pItemPostingBuffer.Date;"										
+"xItemJnlLine.""Document Date"" := xItemJnlLine.""Posting Date"";"										
+"xItemJnlLine.VALIDATE(""Entry Type"",xItemJnlLine.""Entry Type""::Sale);"										
+"xItemJnlLine.""Document No."" := pItemPostingBuffer.""Document No."";"										
+xItemJnlLine.Description := xItem.Description;										
+"xItemJnlLine.""Location Code"" := pItemPostingBuffer.""Location Code"";"										
+"xItemJnlLine.""Inventory Posting Group"" := xItem.""Inventory Posting Group"";"										
+"xItemJnlLine.""Source Posting Group"" := '';"										
+"IF xItem.""Base Unit of Measure"" <> '' THEN BEGIN"										
+"xItemJnlLine.VALIDATE(""Unit of Measure Code"",xItem.""Base Unit of Measure"");"										
+"xItemJnlLine.VALIDATE(Quantity,pItemPostingBuffer.Quantity);"										
+END ELSE BEGIN										
+"xItemJnlLine.""Unit of Measure Code"" := '';"										
+"xItemJnlLine.""Qty. per Unit of Measure"" := 1;"										
+"xItemJnlLine.VALIDATE(""Quantity (Base)"",pItemPostingBuffer.Quantity);"										
+END;										
+"xItemJnlLine.""BO Doc. No."" := pItemPostingBuffer.""Document No."";"										
+"xItemJnlLine.""Unit Amount"" := ROUND(pItemPostingBuffer.Amount / pItemPostingBuffer.Quantity);"										
+"xItemJnlLine.""Unit Cost"" := pItemPostingBuffer.""Cost Amount"" / pItemPostingBuffer.Quantity;"										
+xItemJnlLine.Amount := pItemPostingBuffer.Amount;										
+"xItemJnlLine.""Discount Amount"" :="										
+"pItemPostingBuffer.""Line Discount Amount"" + pItemPostingBuffer.""Inv. Discount Amount"";"										
+"xItemJnlLine.""Salespers./Purch. Code"" := pItemPostingBuffer.""Salesperson Code"";"										
+"xItemJnlLine.""Source Code"" := pLSRetailSetup.""Source Code"";"										
+"xItemJnlLine.""Gen. Bus. Posting Group"" := pStore.""Store Gen. Bus. Post. Gr."";"										
+"xItemJnlLine.""Gen. Prod. Posting Group"" := xItem.""Gen. Prod. Posting Group"";"										
+"xItemJnlLine.""Offer No."" := pItemPostingBuffer.""Offer No."";"										
+"xItemJnlLine.""Promotion No."" := pItemPostingBuffer.""Promotion No."";"										
+"xItemJnlLine.""Expiration Date"" := pItemPostingBuffer.""Expiration Date"";"										
+										
+"IF pItemPostingBuffer.""Serial No."" <> '' THEN"										
+"AddSerialNoTracking(xItemJnlLine,pItemPostingBuffer.""Serial No."");"										
+										
+"IF pItemPostingBuffer.""Lot No."" <> '' THEN"										
+"AddLotNoTracking(xItemJnlLine,pItemPostingBuffer.""Lot No."");"										
+										
+"IF pItemPostingBuffer.""Customer No."" <> '' THEN BEGIN"										
+"xItemJnlLine.""Source No."" := pItemPostingBuffer.""Customer No."";"										
+"xItemJnlLine.""Source Type"" := xItemJnlLine.""Source Type""::Customer;"										
+END;										
+										
+i := 1;										
+CLEAR(xTableID);										
+CLEAR(xNo);										
+xTableID[i] := DATABASE::Item;										
+"xNo[i] := xItemJnlLine.""Item No."";"										
+i += 1;										
+xTableID[i] := DATABASE::Store;										
+"xNo[i] := pStore.""No."";"										
+"IF pItemPostingBuffer.""Customer No."" <> '' THEN BEGIN"										
+i += 1;										
+xTableID[i] := DATABASE::Customer;										
+"xNo[i] := pItemPostingBuffer.""Customer No."";"										
+END;										
+"IF pItemPostingBuffer.""Salesperson Code"" <> '' THEN BEGIN"										
+i += 1;										
+"xTableID[i] := DATABASE::""Salesperson/Purchaser"";"										
+"xNo[i] := pItemPostingBuffer.""Salesperson Code"";"										
+END;										
+"IF xSalesTypes.GET(pItemPostingBuffer.""Sales Type"") THEN BEGIN"										
+i += 1;										
+"xTableID[i] := DATABASE::""Sales Type"";"										
+"xNo[i] := pItemPostingBuffer.""Sales Type"";"										
+END;										
+										
+"CreateItemJnlLineDim(xItemJnlLine,xTableID,xNo);"										
+										
+"DiscLedgerMgt.GetDiscBuffer(ItemPostingBuffer.""Discount Entry No."",DiscBuffer);"										
+ItemJnlPostLine.SetDiscLedgerBuffer(DiscBuffer);										
+ItemJnlPostLine.RunWithCheck(xItemJnlLine);										
+ItemJnlPostLine.ClearDiscLedgerBuffer;										
+										
+IF xTempUnblocking THEN BEGIN										
+"xItem.GET(xItem.""No."");"										
+xItem.Blocked := TRUE;										
+xItem.MODIFY;										
+xTempUnblocking := FALSE;										
+END;										
+										
+IF xTempUnReserve THEN BEGIN										
+"xItem.GET(xItem.""No."");"										
+xItem.Reserve := xItem.Reserve::Always;										
+xItem.MODIFY;										
+xTempUnReserve := FALSE;										
+END;										
+END;										
+END;										
+END;										
+										
+LOCAL PROCEDURE CreateItemJnlLineDim@4(VAR ItemJnlLine@1006 : Record 83;TableID@1200070003 : ARRAY [10] OF Integer;No@1200070002 : A	RRA	Y [	10	] O	F Code[20]);					
+BEGIN										
+//CreateItemJnlLineDim										
+WITH ItemJnlLine DO BEGIN										
+"""Shortcut Dimension 1 Code"" := '';"										
+"""Shortcut Dimension 2 Code"" := '';"										
+"""Dimension Set ID"" :="										
+"DimManagement.GetDefaultDimID(TableID,No,""Source Code"",""Shortcut Dimension 1 Code"",""Shortcut Dimension 2 Code"",0,0);"										
+END;										
+END;										
+										
+PROCEDURE IsSerialNoValid@1100409000(ItemNo@1100409000 : Code[20];VariantCode@1100409001 : Code[10];LocationCode@1100409002 : Code[1	0];	Ser	ia	lNo	@1100409003 : Code[20]) : Boolean;					
+VAR										
+Item@1100409006 : Record 27;										
+ItemTrackingCode@1100409004 : Record 6502;										
+ItemLedgerEntry@1100409005 : Record 32;										
+BEGIN										
+//IsSerialNoValid										
+										
+IF Item.GET(ItemNo) THEN										
+"IF ItemTrackingCode.GET(Item.""Item Tracking Code"") THEN"										
+"IF ItemTrackingCode.""SN Specific Tracking"" THEN BEGIN"										
+ItemLedgerEntry.RESET;										
+"ItemLedgerEntry.SETCURRENTKEY(""Item No."",Open,""Variant Code"",Positive,""Location Code"",""Posting Date"","										
+"""Expiration Date"",""Lot No."",""Serial No."");"										
+"ItemLedgerEntry.SETRANGE(""Item No."",ItemNo);"										
+"ItemLedgerEntry.SETRANGE(""Variant Code"",VariantCode);"										
+"ItemLedgerEntry.SETRANGE(Open,TRUE);"										
+"ItemLedgerEntry.SETRANGE(Positive,TRUE);"										
+"ItemLedgerEntry.SETRANGE(""Location Code"",LocationCode);"										
+"ItemLedgerEntry.SETRANGE(""Serial No."",SerialNo);"										
+IF NOT ItemLedgerEntry.FIND('-') THEN										
+EXIT(FALSE);										
+END;										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE PostAndPrintInvoice@1100409001(ReceiptNo@1100409000 : Code[20]) : Boolean;										
+VAR										
+PosTransaction@1100409001 : Record 99008980;										
+SalesHeader@1100409002 : Record 36;										
+SalesPost@1100409003 : Codeunit 80;										
+ReportSelections@1100409004 : Record 77;										
+SalesInvHeader@1100409005 : Record 112;										
+Store@10012000 : Record 99001470;										
+BEGIN										
+//PostInvoice										
+										
+PosTransaction.GET(ReceiptNo);										
+										
+"IF PosTransaction.""Document No."" <> '' THEN BEGIN"										
+"SalesHeader.GET(SalesHeader.""Document Type""::Invoice,PosTransaction.""Document No."");"										
+"SalesHeader.""Not Show Dialog"" := TRUE;"										
+SalesPost.RUN(SalesHeader);										
+"IF SalesHeader.""Last Posting No."" = '' THEN"										
+"SalesInvHeader.""No."" := SalesHeader.""No."""										
+ELSE										
+"SalesInvHeader.""No."" := SalesHeader.""Last Posting No."";"										
+SalesInvHeader.SETRECFILTER;										
+ReportSelections.RESET;										
+"ReportSelections.SETRANGE(Usage,ReportSelections.Usage::""S.Invoice"");"										
+"ReportSelections.SETFILTER(""Report ID"",'<>0');"										
+IF ReportSelections.FIND('-') THEN REPEAT										
+"REPORT.RUN(ReportSelections.""Report ID"",FALSE,FALSE,SalesInvHeader);"										
+UNTIL ReportSelections.NEXT = 0;										
+EXIT(TRUE)										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE AddSalesLineSerialNoTracking@1000000000(VAR pSalesHeader@1200070000 : Record 36;VAR pSalesLine@1000000001 : Record 37;pSer	ial	No@	10	0	00000 : Code[22];pExpirationDate@1100409000 : Date);					
+VAR										
+ReservationEntry@1000000003 : Record 337;										
+LastEntry@1000000002 : Integer;										
+BEGIN										
+//AddSalesLineSerialNoTracking										
+										
+ReservationEntry.RESET;										
+IF ReservationEntry.FIND('+') THEN										
+"LastEntry := ReservationEntry.""Entry No."""										
+ELSE										
+LastEntry := 0;										
+ReservationEntry.INIT;										
+"ReservationEntry.""Entry No."" := LastEntry + 1;"										
+ReservationEntry.Positive := pSalesLine.Quantity < 0;  // Sign is reversed										
+"ReservationEntry.""Item No."" := pSalesLine.""No."";"										
+"ReservationEntry.""Location Code"" := pSalesLine.""Location Code"";"										
+"ReservationEntry.""Quantity (Base)"" := -pSalesLine.""Quantity (Base)"";"										
+"ReservationEntry.""Reservation Status"" := ReservationEntry.""Reservation Status""::Surplus;"										
+ReservationEntry.Description := pSalesLine.Description;										
+"ReservationEntry.""Creation Date"" := pSalesHeader.""Posting Date"";"										
+"ReservationEntry.""Source Type"" := DATABASE::""Sales Line"";"										
+"ReservationEntry.""Source Subtype"" := pSalesLine.""Document Type"";"										
+"ReservationEntry.""Source ID"" := pSalesLine.""Document No."";"										
+"ReservationEntry.""Source Ref. No."" := pSalesLine.""Line No."";"										
+"ReservationEntry.""Shipment Date"" := pSalesLine.""Shipment Date"";"										
+"ReservationEntry.""Serial No."" := pSerialNo;"										
+"ReservationEntry.""Created By"" := USERID;"										
+"ReservationEntry.""Qty. per Unit of Measure"" := pSalesLine.""Qty. per Unit of Measure"";"										
+ReservationEntry.Quantity := -pSalesLine.Quantity;										
+"ReservationEntry.""Qty. to Handle (Base)"" := ReservationEntry.""Quantity (Base)"";"										
+"ReservationEntry.""Qty. to Invoice (Base)"" := ReservationEntry.""Quantity (Base)"";"										
+"ReservationEntry.""Expiration Date"" := pExpirationDate;"										
+ReservationEntry.INSERT;										
+END;										
+										
+PROCEDURE AddSerialNoTracking@1200070019(pItemJnlLine@1000000001 : Record 83;pSerialNo@1000000000 : Code[22]);										
+VAR										
+ReservationEntry@1000000003 : Record 337;										
+LastEntry@1000000002 : Integer;										
+BEGIN										
+//AddSerialNoTracking										
+										
+ReservationEntry.RESET;										
+IF ReservationEntry.FIND('+') THEN										
+"LastEntry := ReservationEntry.""Entry No."""										
+ELSE										
+LastEntry := 0;										
+ReservationEntry.INIT;										
+"ReservationEntry.""Entry No."" := LastEntry + 1;"										
+ReservationEntry.Positive := pItemJnlLine.Quantity < 0;  // Sign is reversed										
+"ReservationEntry.""Item No."" := pItemJnlLine.""Item No."";"										
+"ReservationEntry.""Location Code"" := pItemJnlLine.""Location Code"";"										
+"ReservationEntry.""Quantity (Base)"" := -pItemJnlLine.""Quantity (Base)"";"										
+"ReservationEntry.""Reservation Status"" := ReservationEntry.""Reservation Status""::Prospect;"										
+ReservationEntry.Description := pItemJnlLine.Description;										
+"ReservationEntry.""Creation Date"" := pItemJnlLine.""Posting Date"";"										
+"ReservationEntry.""Source Type"" := DATABASE::""Item Journal Line"";"										
+"ReservationEntry.""Source Subtype"" := pItemJnlLine.""Entry Type"";"										
+"ReservationEntry.""Source ID"" := pItemJnlLine.""Journal Template Name"";"										
+"ReservationEntry.""Source Batch Name"" := pItemJnlLine.""Journal Batch Name"";"										
+"ReservationEntry.""Source Ref. No."" := pItemJnlLine.""Line No."";"										
+"ReservationEntry.""Shipment Date"" := pItemJnlLine.""Posting Date"";"										
+"ReservationEntry.""Serial No."" := pSerialNo;"										
+"ReservationEntry.""Created By"" := USERID;"										
+"ReservationEntry.""Qty. per Unit of Measure"" := pItemJnlLine.""Qty. per Unit of Measure"";"										
+ReservationEntry.Quantity := -pItemJnlLine.Quantity;										
+"ReservationEntry.""Qty. to Handle (Base)"" := ReservationEntry.""Quantity (Base)"";"										
+"ReservationEntry.""Qty. to Invoice (Base)"" := ReservationEntry.""Quantity (Base)"";"										
+"ReservationEntry.""Expiration Date"" := pItemJnlLine.""Expiration Date"";"										
+ReservationEntry.INSERT;										
+END;										
+										
+PROCEDURE CreateDocNo@10012000(StoreNo@1100409000 : Code[10];POSTerminalNo@1100409001 : Code[10];TransactionNo@1100409002 : Integer)	Do	cNo	:	Co	de[50];					
+VAR										
+LText001@1100409003 : TextConst 'ENU=The length of the Document No. (%1) can not exceed 20 characters.\The Document No. is constru	cte	d b	y	con	"catenating the Store No. (%2), POS Terminal No. (%3) and the Transaction No. (%4) seperated by ""-"".\Please make sure the combined length of the Store No. and the POS Terminal No. does not exceed 10 characters.;ESP=La longitud del No. Documento (%1) no puede exceder de 20 caracteres.\El No. Documento est  construido concatenando el No. Tienda (%2), TPV (%3), y el No. Transacci¢n (%4) separado por """"""""-"""""""".\Por favor, aseg£rese que la longitud combinada del No. Tienda y del TPV no pasa de 10 caracteres.';"					
+BEGIN										
+//CreateDocNo										
+										
+DocNo := StoreNo + '-' +										
+POSTerminalNo + '-' +										
+FORMAT(TransactionNo);										
+IF STRLEN(DocNo) > 20 THEN										
+"ERROR(LText001,DocNo,StoreNo,POSTerminalNo,TransactionNo);"										
+END;										
+										
+PROCEDURE AddSalesLineLotNoTracking@10012002(VAR pSalesHeader@1200070000 : Record 36;VAR pSalesLine@1000000001 : Record 37;pLotNo@10	0	0	0	:	Code[22];pExpirationDate@1000000005 : Date);					
+VAR										
+ReservationEntry@1000000003 : Record 337;										
+LastEntry@1000000002 : Integer;										
+BEGIN										
+//AddSalesLineLotNoTracking										
+ReservationEntry.RESET;										
+IF ReservationEntry.FIND('+') THEN										
+"LastEntry := ReservationEntry.""Entry No."""										
+ELSE										
+LastEntry := 0;										
+ReservationEntry.INIT;										
+"ReservationEntry.""Entry No."" := LastEntry + 1;"										
+ReservationEntry.Positive := pSalesLine.Quantity < 0;  // Sign is reversed										
+"ReservationEntry.""Item No."" := pSalesLine.""No."";"										
+"ReservationEntry.""Location Code"" := pSalesLine.""Location Code"";"										
+"ReservationEntry.""Quantity (Base)"" := -pSalesLine.""Quantity (Base)"";"										
+"ReservationEntry.""Reservation Status"" := ReservationEntry.""Reservation Status""::Surplus;"										
+ReservationEntry.Description := pSalesLine.Description;										
+"ReservationEntry.""Creation Date"" := pSalesHeader.""Posting Date"";"										
+"ReservationEntry.""Source Type"" := DATABASE::""Sales Line"";"										
+"ReservationEntry.""Source Subtype"" := pSalesLine.""Document Type"";"										
+"ReservationEntry.""Source ID"" := pSalesLine.""Document No."";"										
+"ReservationEntry.""Source Ref. No."" := pSalesLine.""Line No."";"										
+"ReservationEntry.""Shipment Date"" := pSalesLine.""Shipment Date"";"										
+"ReservationEntry.""Lot No."" := pLotNo;"										
+"ReservationEntry.""Expiration Date"" := pExpirationDate;"										
+"ReservationEntry.""Created By"" := USERID;"										
+"ReservationEntry.""Qty. per Unit of Measure"" := pSalesLine.""Qty. per Unit of Measure"";"										
+ReservationEntry.Quantity := -pSalesLine.Quantity;										
+"ReservationEntry.""Qty. to Handle (Base)"" := ReservationEntry.""Quantity (Base)"";"										
+"ReservationEntry.""Qty. to Invoice (Base)"" := ReservationEntry.""Quantity (Base)"";"										
+ReservationEntry.INSERT;										
+END;										
+										
+PROCEDURE AddLotNoTracking@1000000001(pItemJnlLine@1000000001 : Record 83;pLotNo@1000000000 : Code[22]);										
+VAR										
+ReservationEntry@1000000003 : Record 337;										
+LastEntry@1000000002 : Integer;										
+BEGIN										
+//AddLotNoTracking										
+ReservationEntry.RESET;										
+IF ReservationEntry.FIND('+') THEN										
+"LastEntry := ReservationEntry.""Entry No."""										
+ELSE										
+LastEntry := 0;										
+ReservationEntry.INIT;										
+"ReservationEntry.""Entry No."" := LastEntry + 1;"										
+ReservationEntry.Positive := pItemJnlLine.Quantity < 0;  // Sign is reversed										
+"ReservationEntry.""Item No."" := pItemJnlLine.""Item No."";"										
+"ReservationEntry.""Location Code"" := pItemJnlLine.""Location Code"";"										
+"ReservationEntry.""Quantity (Base)"" := -pItemJnlLine.""Quantity (Base)"";"										
+"ReservationEntry.""Reservation Status"" := ReservationEntry.""Reservation Status""::Prospect;"										
+ReservationEntry.Description := pItemJnlLine.Description;										
+"ReservationEntry.""Creation Date"" := pItemJnlLine.""Posting Date"";"										
+"ReservationEntry.""Source Type"" := DATABASE::""Item Journal Line"";"										
+"ReservationEntry.""Source Subtype"" := pItemJnlLine.""Entry Type"";"										
+"ReservationEntry.""Source ID"" := pItemJnlLine.""Journal Template Name"";"										
+"ReservationEntry.""Source Batch Name"" := pItemJnlLine.""Journal Batch Name"";"										
+"ReservationEntry.""Source Ref. No."" := pItemJnlLine.""Line No."";"										
+"ReservationEntry.""Shipment Date"" := pItemJnlLine.""Posting Date"";"										
+"ReservationEntry.""Lot No."" := pLotNo;"										
+"ReservationEntry.""Created By"" := USERID;"										
+"ReservationEntry.""Qty. per Unit of Measure"" := pItemJnlLine.""Qty. per Unit of Measure"";"										
+ReservationEntry.Quantity := -pItemJnlLine.Quantity;										
+"ReservationEntry.""Qty. to Handle (Base)"" := ReservationEntry.""Quantity (Base)"";"										
+"ReservationEntry.""Qty. to Invoice (Base)"" := ReservationEntry.""Quantity (Base)"";"										
+"ReservationEntry.""Expiration Date"" := pItemJnlLine.""Expiration Date"";"										
+ReservationEntry.INSERT;										
+END;										
+										
+PROCEDURE SerialLotSplitSalesLines@1100409008(VAR pSalesHeader@1100409009 : Record 36);										
+VAR										
+SalesLine@1100409008 : Record 37;										
+LastSalesLineNo@1100409000 : Integer;										
+TempTrackingSpec@1100409002 : TEMPORARY Record 336;										
+BEGIN										
+//SplitSalesLines										
+										
+SalesLine.RESET;										
+"SalesLine.SETRANGE(""Document Type"",pSalesHeader.""Document Type"");"										
+"SalesLine.SETRANGE(""Document No."",pSalesHeader.""No."");"										
+IF SalesLine.FINDLAST THEN										
+"LastSalesLineNo := SalesLine.""Line No."";"										
+										
+SalesLine.RESET;										
+"SalesLine.SETRANGE(""Document Type"",pSalesHeader.""Document Type"");"										
+"SalesLine.SETRANGE(""Document No."",pSalesHeader.""No."");"										
+"SalesLine.SETRANGE(""Line No."",0,LastSalesLineNo);"										
+IF SalesLine.FIND('-') THEN										
+REPEAT										
+IF SalesLine.Type = SalesLine.Type::Item THEN BEGIN										
+"FindReservEntries(TempTrackingSpec,DATABASE::""Sales Line"","										
+"SalesLine.""Document Type"",SalesLine.""Document No."",'',0,SalesLine.""Line No."");"										
+										
+"IF RetailItemTracking.IsItemSNTracking(SalesLine.""No."") OR RetailItemTracking.IsItemLotTracking(SalesLine.""No."") OR"										
+(NOT TempTrackingSpec.ISEMPTY)										
+THEN										
+"SplitSalesLine(pSalesHeader,SalesLine,TempTrackingSpec);"										
+END;										
+UNTIL SalesLine.NEXT = 0;										
+END;										
+										
+PROCEDURE SplitSalesLine@1100409005(VAR pSalesHeader@1100409009 : Record 36;VAR pSalesLine@1100409000 : Record 37;VAR pTrackingSpec@	110	40	90	11	: TEMPORARY Record 336);					
+VAR										
+RemQty@1100409004 : Decimal;										
+LineNo@1100409006 : Integer;										
+SignFactor@1100409003 : Integer;										
+lText001@1100409001 : TextConst 'ENU=Item tracking %1 mismatch for item %2;ESP=La trazabilidad de producto %1 no se corresponde co	n e	l p	ro	duc	to %2';					
+LastSalesLineNo@1100409007 : Integer;										
+SalesLine@1100409008 : Record 37;										
+BEGIN										
+//SplitSalesLine										
+										
+LineNo := 0;										
+										
+SalesLine.RESET;										
+"SalesLine.SETRANGE(""Document Type"",pSalesLine.""Document Type"");"										
+"SalesLine.SETRANGE(""Document No."",pSalesLine.""Document No."");"										
+IF SalesLine.FINDLAST THEN										
+"LastSalesLineNo := SalesLine.""Line No."""										
+ELSE										
+LastSalesLineNo := 0;										
+										
+"IF pSalesLine.""Document Type"" IN[pSalesLine.""Document Type""::""Credit Memo"",pSalesLine.""Document Type""::""Return Order""] THEN"										
+SignFactor := 1										
+ELSE										
+SignFactor := -1;										
+										
+IF NOT pTrackingSpec.ISEMPTY THEN BEGIN										
+"RemQty := pSalesLine.""Outstanding Qty. (Base)"";"										
+pTrackingSpec.RESET;										
+IF pTrackingSpec.FIND('-') THEN										
+REPEAT										
+"IF pSalesLine.""Qty. per Unit of Measure"" <> pTrackingSpec.""Qty. per Unit of Measure"" THEN"										
+"ERROR(lText001,pSalesLine.FIELDCAPTION(""Qty. per Unit of Measure""),pSalesLine.""No."");"										
+										
+"RemQty := RemQty - (SignFactor * pTrackingSpec.""Qty. to Handle (Base)"");"										
+LineNo := LineNo + 1;										
+IF LineNo = 1 THEN BEGIN										
+"SalesLine.GET(pSalesLine.""Document Type"",pSalesLine.""Document No."",pSalesLine.""Line No."");"										
+END ELSE BEGIN										
+SalesLine.INIT;										
+SalesLine := pSalesLine;										
+LastSalesLineNo := LastSalesLineNo + 10000;										
+"SalesLine.""Line No."" := LastSalesLineNo;"										
+SalesLine.INSERT;										
+END;										
+										
+"DeleteReservEntries(DATABASE::""Sales Line"",pSalesHeader.""Document Type"",pSalesHeader.""No."",SalesLine.""Line No."");"										
+										
+"SalesLine.Quantity := (SignFactor * pTrackingSpec.""Qty. to Handle (Base)"") /"										
+"pTrackingSpec.""Qty. per Unit of Measure"";"										
+SalesLine.VALIDATE(SalesLine.Quantity);										
+SalesLine.MODIFY();										
+										
+"IF pTrackingSpec.""Serial No."" <> '' THEN"										
+"AddSalesLineSerialNoTracking(pSalesHeader,SalesLine,pTrackingSpec.""Serial No."",pTrackingSpec.""Expiration Date"");"										
+										
+"IF pTrackingSpec.""Lot No."" <> '' THEN"										
+"AddSalesLineLotNoTracking(pSalesHeader,SalesLine,pTrackingSpec.""Lot No."",pTrackingSpec.""Expiration Date"");"										
+										
+UNTIL pTrackingSpec.NEXT = 0;										
+IF RemQty <> 0 THEN										
+"ERROR(lText001,pSalesLine.FIELDCAPTION(Quantity),pSalesLine.""No."");"										
+END ELSE										
+"ERROR(lText001,pSalesLine.FIELDCAPTION(Quantity),pSalesLine.""No."");"										
+END;										
+										
+PROCEDURE FindReservEntries@1100409002(VAR pTrackingSpecBuffer@1100409006 : TEMPORARY Record 336;pType@1100409005 : Integer;pSubtype	@11	4	9	4	: Integer;pID@1100409003 : Code[20];pBatchName@1100409002 : Code[10];pProdOrderLine@1100409001 : Integer;pRefNo@1100409000 : Integer);					
+VAR										
+ReservEntry@1100409007 : Record 337;										
+BEGIN										
+//FindReservEntries										
+										
+"ReservEntry.SETCURRENTKEY(""Source ID"",""Source Ref. No."",""Source Type"",""Source Subtype"",""Source Batch Name"","										
+"""Source Prod. Order Line"",""Reservation Status"",""Shipment Date"",""Expected Receipt Date"");"										
+"ReservEntry.SETRANGE(""Source ID"",pID);"										
+"ReservEntry.SETRANGE(""Source Ref. No."",pRefNo);"										
+"ReservEntry.SETRANGE(""Source Type"",pType);"										
+"ReservEntry.SETRANGE(""Source Subtype"",pSubtype);"										
+"ReservEntry.SETRANGE(""Source Batch Name"",pBatchName);"										
+"ReservEntry.SETRANGE(""Source Prod. Order Line"",pProdOrderLine);"										
+IF ReservEntry.FIND('-') THEN										
+REPEAT										
+"IF (ReservEntry.""Lot No."" <> '') OR (ReservEntry.""Serial No."" <> '') THEN BEGIN"										
+pTrackingSpecBuffer.TRANSFERFIELDS(ReservEntry);										
+"pTrackingSpecBuffer.""Qty. to Handle"" := pTrackingSpecBuffer.CalcQty(pTrackingSpecBuffer.""Qty. to Handle (Base)"");"										
+"pTrackingSpecBuffer.""Qty. to Invoice"" := pTrackingSpecBuffer.CalcQty(pTrackingSpecBuffer.""Qty. to Invoice (Base)"");"										
+pTrackingSpecBuffer.INSERT;										
+END;										
+UNTIL ReservEntry.NEXT = 0;										
+END;										
+										
+PROCEDURE DeleteReservEntries@1100409012(pType@1100409005 : Integer;pSubtype@1100409000 : Integer;pID@1100409003 : Code[20];pRefNo@1	100	409	0	1:00	Integer);					
+VAR										
+ReservEntry@1100409007 : Record 337;										
+BEGIN										
+//DeleteReservEntries										
+"ReservEntry.SETCURRENTKEY(""Source ID"",""Source Ref. No."",""Source Type"",""Source Subtype"",""Source Batch Name"","										
+"""Source Prod. Order Line"",""Reservation Status"",""Shipment Date"",""Expected Receipt Date"");"										
+"ReservEntry.SETRANGE(""Source ID"",pID);"										
+"ReservEntry.SETRANGE(""Source Ref. No."",pRefNo);"										
+"ReservEntry.SETRANGE(""Source Type"",pType);"										
+"ReservEntry.SETRANGE(""Source Subtype"",pSubtype);"										
+IF ReservEntry.FIND('-') THEN										
+REPEAT										
+"IF (ReservEntry.""Lot No."" <> '') OR (ReservEntry.""Serial No."" <> '') THEN BEGIN"										
+ReservEntry.DELETE;										
+END;										
+UNTIL ReservEntry.NEXT = 0;										
+END;										
+										
+PROCEDURE CreateDiscBuffer@1100409019(VAR pTransSalesEntry@1100409000 : Record 99001473;pVATFactor@1100409003 : Decimal);										
+VAR										
+TransDiscountEntry@1100409005 : Record 99001642;										
+DiscBuffer@1100409002 : TEMPORARY Record 99001659;										
+BEGIN										
+//CreateDiscBuffer										
+TransDiscountEntry.RESET;										
+"TransDiscountEntry.SETRANGE(""Store No."",pTransSalesEntry.""Store No."");"										
+"TransDiscountEntry.SETRANGE(""POS Terminal No."",pTransSalesEntry.""POS Terminal No."");"										
+"TransDiscountEntry.SETRANGE(""Transaction No."",pTransSalesEntry.""Transaction No."");"										
+"TransDiscountEntry.SETRANGE(""Line No."",pTransSalesEntry.""Line No."");"										
+IF TransDiscountEntry.FIND('-') THEN										
+REPEAT										
+DiscBuffer.INIT;										
+"DiscBuffer.""Offer Type"" := TransDiscountEntry.""Offer Type"";"										
+"DiscBuffer.""Offer No."" := TransDiscountEntry.""Offer No."";"										
+DiscBuffer.Quantity := -pTransSalesEntry.Quantity;										
+"DiscBuffer.""Sales Amount"" := -pTransSalesEntry.""Net Amount"";"										
+"DiscBuffer.""Discount Amount"" := ROUND(TransDiscountEntry.""Discount Amount"" / pVATFactor);"										
+DiscBuffer.INSERT;										
+UNTIL TransDiscountEntry.NEXT = 0;										
+DiscLedgerMgt.SaveCurrDiscBuffer(DiscBuffer);										
+END;										
+										
+PROCEDURE InsertSalesLineDiscEntry@1100409011(VAR pTransSalesEntry@1100409000 : Record 99001473;VAR pSalesLine@1100409001 : Record 3	7);									
+VAR										
+TransDiscountEntry@1100409005 : Record 99001642;										
+SalesLineDiscEntry@1100409003 : Record 99001689;										
+BEGIN										
+//InsertSalesLineDiscEntry										
+TransDiscountEntry.RESET;										
+"TransDiscountEntry.SETRANGE(""Store No."",pTransSalesEntry.""Store No."");"										
+"TransDiscountEntry.SETRANGE(""POS Terminal No."",pTransSalesEntry.""POS Terminal No."");"										
+"TransDiscountEntry.SETRANGE(""Transaction No."",pTransSalesEntry.""Transaction No."");"										
+"TransDiscountEntry.SETRANGE(""Line No."",pTransSalesEntry.""Line No."");"										
+IF TransDiscountEntry.FIND('-') THEN										
+REPEAT										
+"InitSalesLineDiscEntry(pSalesLine,SalesLineDiscEntry);"										
+"SalesLineDiscEntry.""Offer Type"" := TransDiscountEntry.""Offer Type"";"										
+"SalesLineDiscEntry.""Offer No."" := TransDiscountEntry.""Offer No."";"										
+"SalesLineDiscEntry.""Discount Amount"" := pTransSalesEntry.""Periodic Discount"";"										
+SalesLineDiscEntry.INSERT;										
+UNTIL TransDiscountEntry.NEXT = 0;										
+END;										
+										
+PROCEDURE InitSalesLineDiscEntry@1100409009(VAR pSalesLine@1100409001 : Record 37;VAR pSalesLineDiscEntry@1100409000 : Record 990016	89)	;								
+BEGIN										
+//InitSalesLineDiscEntry										
+pSalesLineDiscEntry.INIT;										
+"pSalesLineDiscEntry.""Document Type"" := pSalesLine.""Document Type"";"										
+"pSalesLineDiscEntry.""Document No."" := pSalesLine.""Document No."";"										
+"pSalesLineDiscEntry.""Document Line No."" := pSalesLine.""Line No."";"										
+END;										
+										
+BEGIN										
+{										
+"LS7.1-01 StK  #25077# 20.09.2013 - Retail Sales Order, multibuy issue fix"										
+}										
+END.										
+}										
+}										
+										

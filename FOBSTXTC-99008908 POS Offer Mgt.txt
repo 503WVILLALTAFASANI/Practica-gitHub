@@ -1,0 +1,186 @@
+OBJECT Codeunit 99008908 POS Offer Mgt										
+{										
+OBJECT-PROPERTIES										
+{										
+Date=07/05/14;										
+Time=12:00:00 p.m.;										
+Version List=LSW17.1;										
+}										
+PROPERTIES										
+{										
+OnRun=BEGIN										
+END;										
+										
+}										
+CODE										
+{										
+VAR										
+PosTransLineBuffer@1100409000 : TEMPORARY Record 99008981;										
+OfferCalcBuffer@1100409001 : TEMPORARY Record 99001561;										
+LastEntryNo@1100409002 : Integer;										
+SkipPosTransLineBuffer@1100409003 : TEMPORARY Record 99008981;										
+										
+PROCEDURE ClearOfferBuffer@1100409000();										
+BEGIN										
+//ClearOfferBuffer										
+										
+LastEntryNo := 0;										
+										
+PosTransLineBuffer.RESET;										
+PosTransLineBuffer.DELETEALL;										
+										
+OfferCalcBuffer.RESET;										
+OfferCalcBuffer.DELETEALL;										
+END;										
+										
+PROCEDURE AddPosTransLineOffers@1100409001(VAR pPosTransLine@1100409001 : Record 99008981);										
+VAR										
+OfferPosCalc@1100409000 : Record 99001561;										
+UseTransLineTime@1100409002 : Boolean;										
+BEGIN										
+//AddPosTransLinesOffer										
+										
+IF NOT FindOfferBufferRec(pPosTransLine) THEN BEGIN										
+LastEntryNo := LastEntryNo + 1;										
+PosTransLineBuffer.INIT;										
+"PosTransLineBuffer.""Receipt No."" := pPosTransLine.""Receipt No."";"										
+"PosTransLineBuffer.""Line No."" := LastEntryNo;"										
+PosTransLineBuffer.Number := pPosTransLine.Number;										
+"PosTransLineBuffer.""Currency Code"" := pPosTransLine.""Currency Code"";"										
+"PosTransLineBuffer.""Variant Code"" := pPosTransLine.""Variant Code"";"										
+"PosTransLineBuffer.""Unit of Measure"" := pPosTransLine.""Unit of Measure"";"										
+"PosTransLineBuffer.""Store No."" := pPosTransLine.""Store No."";"										
+"PosTransLineBuffer.""Price Group Code"" := pPosTransLine.""Price Group Code"";"										
+"PosTransLineBuffer.""Sales Type"" := pPosTransLine.""Sales Type"";"										
+"PosTransLineBuffer.""Promotion No."" := pPosTransLine.""Promotion No."";"										
+"PosTransLineBuffer.""System-Block Manual Discount"" := pPosTransLine.""System-Block Manual Discount"";"										
+"PosTransLineBuffer.""System-Exclude from Offers"" := pPosTransLine.""System-Exclude from Offers"";"										
+"PosTransLineBuffer.""System-Unchangable Quantity"" := pPosTransLine.""System-Unchangable Quantity"";"										
+"PosTransLineBuffer.""Trans. Time"" := TIME;"										
+										
+UseTransLineTime := FALSE;										
+OfferPosCalc.RESET;										
+"OfferPosCalc.SETRANGE(""Receipt No."",pPosTransLine.""Receipt No."");"										
+"OfferPosCalc.SETRANGE(""Trans. Line No."",pPosTransLine.""Line No."");"										
+IF OfferPosCalc.FIND('-') THEN										
+REPEAT										
+OfferCalcBuffer.INIT;										
+OfferCalcBuffer := OfferPosCalc;										
+"OfferCalcBuffer.""Trans. Line No."" := PosTransLineBuffer.""Line No."";"										
+OfferCalcBuffer.INSERT;										
+"IF OfferPosCalc.""Use Trans. Line Time"" THEN"										
+UseTransLineTime := TRUE;										
+UNTIL OfferPosCalc.NEXT = 0;										
+										
+PosTransLineBuffer.Marked := UseTransLineTime;										
+PosTransLineBuffer.INSERT;										
+END;										
+END;										
+										
+PROCEDURE GetPosTransLineOffers@1100409003(VAR pPosTransLine@1100409001 : Record 99008981;VAR pOfferCalcBuffer@1100409000 : TEMPORAR	Y R	eco	rd	99	001561) : Boolean;					
+VAR										
+Expired@1100409002 : Boolean;										
+BEGIN										
+//GetPosTransLineOffers										
+										
+pOfferCalcBuffer.RESET;										
+pOfferCalcBuffer.DELETEALL;										
+										
+IF FindOfferBufferRec(pPosTransLine) THEN BEGIN										
+Expired := FALSE;										
+IF PosTransLineBuffer.Marked THEN										
+Expired := TRUE										
+ELSE										
+"IF PosTransLineBuffer.""Trans. Time"" > TIME THEN"										
+Expired := TRUE										
+ELSE										
+"IF (PosTransLineBuffer.""Trans. Time"" + (5 * 60000)) <= TIME THEN"										
+Expired := TRUE;										
+IF Expired THEN BEGIN										
+ClearOfferBufferRec;										
+EXIT(FALSE);										
+END ELSE BEGIN										
+OfferCalcBuffer.RESET;										
+"OfferCalcBuffer.SETRANGE(""Receipt No."",PosTransLineBuffer.""Receipt No."");"										
+"OfferCalcBuffer.SETRANGE(""Trans. Line No."",PosTransLineBuffer.""Line No."");"										
+IF OfferCalcBuffer.FIND('-') THEN										
+REPEAT										
+pOfferCalcBuffer.INIT;										
+pOfferCalcBuffer := OfferCalcBuffer;										
+"pOfferCalcBuffer.""Trans. Line No."" := pPosTransLine.""Line No."";"										
+pOfferCalcBuffer.INSERT;										
+UNTIL OfferCalcBuffer.NEXT = 0;										
+EXIT(TRUE);										
+END;										
+END ELSE										
+EXIT(FALSE);										
+END;										
+										
+LOCAL PROCEDURE FindOfferBufferRec@1100409006(VAR pPosTransLine@1100409000 : Record 99008981) : Boolean;										
+BEGIN										
+//FindOfferBufferRec										
+										
+"PosTransLineBuffer.SETRANGE(""Receipt No."",pPosTransLine.""Receipt No."");"										
+"PosTransLineBuffer.SETRANGE(Number,pPosTransLine.Number);"										
+"PosTransLineBuffer.SETRANGE(""Currency Code"",pPosTransLine.""Currency Code"");"										
+"PosTransLineBuffer.SETRANGE(""Variant Code"",pPosTransLine.""Variant Code"");"										
+"PosTransLineBuffer.SETRANGE(""Unit of Measure"",pPosTransLine.""Unit of Measure"");"										
+"PosTransLineBuffer.SETRANGE(""Store No."",pPosTransLine.""Store No."");"										
+"PosTransLineBuffer.SETRANGE(""Price Group Code"",pPosTransLine.""Price Group Code"");"										
+"PosTransLineBuffer.SETRANGE(""Sales Type"",pPosTransLine.""Sales Type"");"										
+"PosTransLineBuffer.SETRANGE(""Promotion No."",pPosTransLine.""Promotion No."");"										
+"PosTransLineBuffer.SETRANGE(""System-Block Manual Discount"",pPosTransLine.""System-Block Manual Discount"");"										
+"PosTransLineBuffer.SETRANGE(""System-Exclude from Offers"",pPosTransLine.""System-Exclude from Offers"");"										
+"PosTransLineBuffer.SETRANGE(""System-Unchangable Offer"",pPosTransLine.""System-Unchangable Offer"");"										
+EXIT(PosTransLineBuffer.FINDFIRST);										
+END;										
+										
+LOCAL PROCEDURE ClearOfferBufferRec@1100409002();										
+BEGIN										
+//ClearOfferBufferRec										
+										
+PosTransLineBuffer.DELETE;										
+										
+OfferCalcBuffer.RESET;										
+"OfferCalcBuffer.SETRANGE(""Receipt No."",PosTransLineBuffer.""Receipt No."");"										
+"OfferCalcBuffer.SETRANGE(""Trans. Line No."",PosTransLineBuffer.""Line No."");"										
+OfferCalcBuffer.DELETEALL;										
+END;										
+										
+PROCEDURE ClearSkipPosTransLineBuffer@1100409004();										
+BEGIN										
+//ClearSkipPosTransLineBuffer										
+										
+SkipPosTransLineBuffer.RESET;										
+SkipPosTransLineBuffer.DELETEALL;										
+END;										
+										
+PROCEDURE AddSkipPosTransLine@1100409005(VAR pPosTransLine@1100409001 : Record 99008981);										
+VAR										
+OfferPosCalc@1100409000 : Record 99001561;										
+BEGIN										
+//SetSkipPosTransLine										
+										
+"IF NOT SkipPosTransLineBuffer.GET(pPosTransLine.""Receipt No."",pPosTransLine.""Line No."") THEN BEGIN"										
+SkipPosTransLineBuffer.INIT;										
+"SkipPosTransLineBuffer.""Receipt No."" := pPosTransLine.""Receipt No."";"										
+"SkipPosTransLineBuffer.""Line No."" := pPosTransLine.""Line No."";"										
+SkipPosTransLineBuffer.INSERT;										
+END;										
+END;										
+										
+PROCEDURE SkipPosTransLine@1100409010(VAR pPosTransLine@1100409000 : Record 99008981) : Boolean;										
+BEGIN										
+//SkipPosTransLine										
+										
+"EXIT(SkipPosTransLineBuffer.GET(pPosTransLine.""Receipt No."",pPosTransLine.""Line No.""));"										
+END;										
+										
+BEGIN										
+{										
+LS7.1-01 StK #25699# 26.09.2013 - New Codeunit for Offer management.										
+}										
+END.										
+}										
+}										
+										

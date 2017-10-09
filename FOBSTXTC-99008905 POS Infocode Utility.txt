@@ -1,0 +1,1560 @@
+OBJECT Codeunit 99008905 POS Infocode Utility										
+{										
+OBJECT-PROPERTIES										
+{										
+Date=07/05/14;										
+Time=12:00:00 p.m.;										
+Version List=LSW17.1;										
+}										
+PROPERTIES										
+{										
+OnRun=BEGIN										
+END;										
+										
+}										
+CODE										
+{										
+VAR										
+Text014@1006 : TextConst 'ENU=Input is required for this infocode;ESP=Entrada necesaria para este Infoc¢digo';										
+Text015@1007 : TextConst 'ENU=Max. length for subcode is 20;ESP=Longitud m x. para el subc¢digo es 20';										
+Text016@1008 : TextConst 'ENU=Subcode not defined for this infocode;ESP=Subc¢digo no definido para este infoc¢digo';										
+Text017@1009 : TextConst 'ENU=Invalid value in date;ESP=Valor Inv lido en la fecha';										
+Text018@1010 : TextConst 'ENU=Invalid value in numeric data;ESP=Valor Inv lido en dato num‚rico';										
+Text019@1011 : TextConst 'ENU=Min. value for this infocode is %1;ESP=El valor m¡n. para este infoc¢digo es %1';										
+Text020@1012 : TextConst 'ENU=Max. value for this infocode is %1;ESP=Valor m x. para este infoc¢digo es %1';										
+Text021@1013 : TextConst 'ENU=Max. length for Item no. is 20;ESP=La Longitud m x. para este no. Producto es 20';										
+Text022@1014 : TextConst 'ENU=Item not on file;ESP=Producto no en fichero';										
+Text023@1015 : TextConst 'ENU=Max. length for Customer no. is 20;ESP=Longitud m x. para el No. Cliente es 20';										
+Text024@1016 : TextConst 'ENU=Customer not on file;ESP=Cliente no en fichero';										
+Text025@1017 : TextConst 'ENU=Max. length for Staff no. is 20;ESP=La longitud M x. para el no. Empleado es 20';										
+Text026@1018 : TextConst 'ENU=Staff not on file;ESP=El Empleado no est  en el fichero';										
+Text027@1019 : TextConst 'ENU=Appl. Entry already exists;ESP=Mov. Liquidaci¢n ya existe';										
+Text028@1020 : TextConst 'ENU=Amount is not the same as in the appl. entry;ESP=El Importe no es el mismo que en el mov. liquidaci¢	n';									
+Text029@1021 : TextConst 'ENU=Entry %1 %2 not found;ESP=Mov. %1 %2 no encontrado';										
+Text030@1022 : TextConst 'ENU=Amount %1 does not match;ESP=El Importe %1 no coincide';										
+Text031@1023 : TextConst 'ENU=Entry %1 %2 has already been applied;ESP=El Mov. %1 %2 ya ha sido aplicado';										
+Text032@1024 : TextConst 'ENU=Min. length for this infocode is %1;ESP=La longitud m¡nima para este infoc¢digo es %1';										
+Text033@1025 : TextConst 'ENU=Max. length for this infocode is %1;ESP=La longitud m xima para este infoc¢digo es %1';										
+Text034@1026 : TextConst 'ENU=The length of the barcode is not correct.;ESP=La longitud del C¢d. Barras es incorrecta.';										
+_GTSConnError@1032 : TextConst 'ENU=Error connecting to Transaction Server.;ESP=Error al conectar con el Servidor de Transacciones	';									
+_GTSReservered@1033 : TextConst 'ENU=Entry is already reserved by POS terminal %1.;ESP=El Mov. ya est  reservado para el TPV %1.';										
+PosFuncProfile@1000 : Record 99001515;										
+InfoCode@1001 : Record 99001482;										
+TabSpecInfo@1002 : Record 99001479;										
+TenderType@1003 : Record 99001462;										
+CrossSellSubCode@1100409002 : Record 99001483;										
+TSUtil@1030 : Codeunit 99008909;										
+Global@1004 : Codeunit 99008919;										
+PosGUI@1100409008 : Codeunit 99001575;										
+IncExpAccount@1005 : Record 99001476;										
+Text035@1027 : TextConst 'ENU=%1 for %2 is missing in %3.;ESP=%1 para %2 se perdieron en %3.';										
+Text036@1028 : TextConst 'ENU=Application entries can not be issued\and applied within same sale;ESP=Los Movimientos liquidaci¢n n	o p	ued	en	se	r emitidos\y aplicados en la misma venta';					
+SSError@1031 : Boolean;										
+Text037@1000000000 : TextConst 'ENU=Serial No. %1 does not exist for Item %2 %3 %4.;ESP=No. Serie %1 no existe para el Producto %2	3%	4%	.'	;						
+Text038@1000000002 : TextConst 'ENU=Not able to connect to server %1.;ESP=No fue posible conectar al servidor %1.';										
+Text039@1000000003 : TextConst 'ENU=No answer from Terminal Server %1.;ESP=Sin respuesta del Terminal Server %1.';										
+POSActions@1100409000 : Record 99001620;										
+POSActionInfocode@1100409001 : Code[10];										
+TenderTypeCurrSetup@1100409003 : Record 99001636;										
+Text040@1100409006 : TextConst 'ENU=Voucher Entry List;ESP=Lista Mov. Vale';										
+Text041@1100409005 : TextConst 'ENU=No Voucher Entries exist.;ESP=No existen Movs. Vale.';										
+Text042@1100409004 : TextConst 'ENU=No Data Entries exists.;ESP=No existen Movs. Datos.';										
+Text043@1100409007 : TextConst 'ENU=%1 %2 has expired;ESP=%1 %2 ha caducado';										
+Text044@1100409009 : TextConst 'ENU=Input to large.;ESP=Entrada de datos muy grande.';										
+										
+PROCEDURE InfoCodeRequired@4(Module@1000 : Code[10];Code@1001 : Code[20];Code2@1100409000 : Code[20]) : Boolean;										
+VAR										
+Item@1003 : Record 27;										
+Store@10012000 : Record 99001470;										
+BEGIN										
+//InfoCodeRequired										
+CLEAR(InfoCode);										
+TabSpecInfo.RESET;										
+"TabSpecInfo.SETCURRENTKEY(""Table ID"",Value,Sequence);"										
+										
+CLEAR(POSActions);										
+										
+Store.GET(Global.StoreNo);										
+PosFuncProfile.GET(Global.FunctionalityProfileID);										
+										
+CASE Module OF										
+'ITEM':										
+BEGIN										
+"TabSpecInfo.SETRANGE(""Table ID"",DATABASE::Item);"										
+"TabSpecInfo.SETRANGE(Value,Code);"										
+IF TabSpecInfo.FIND('-') THEN										
+EXIT(TRUE)										
+ELSE BEGIN										
+IF NOT Item.GET(Code) THEN										
+EXIT(FALSE);										
+"TabSpecInfo.SETRANGE(""Table ID"",DATABASE::""Product Group"");"										
+"TabSpecInfo.SETRANGE(Value,Item.""Product Group Code"");"										
+IF TabSpecInfo.FIND('-') THEN										
+EXIT(TRUE)										
+ELSE BEGIN										
+"TabSpecInfo.SETRANGE(""Table ID"",DATABASE::""Item Category"");"										
+"TabSpecInfo.SETRANGE(Value,Item.""Item Category Code"");"										
+IF TabSpecInfo.FIND('-') THEN										
+EXIT(TRUE)										
+END;										
+END;										
+EXIT(FALSE);										
+END;										
+'PAYMENT':										
+BEGIN										
+"IF NOT TenderType.GET(Global.StoreNo,Code) THEN"										
+EXIT(FALSE);										
+"TabSpecInfo.SETRANGE(""Table ID"",DATABASE::""Tender Type"");"										
+"TabSpecInfo.SETRANGE(Value,TenderType.""Primary Key"");"										
+IF TabSpecInfo.FIND('-') THEN										
+EXIT(TRUE)										
+ELSE										
+EXIT(FALSE);										
+END;										
+'CUSTOMER':										
+BEGIN										
+"TabSpecInfo.SETRANGE(""Table ID"",DATABASE::Customer);"										
+"TabSpecInfo.SETRANGE(Value,Code);"										
+IF TabSpecInfo.FIND('-') THEN										
+EXIT(TRUE)										
+ELSE										
+EXIT(FALSE);										
+END;										
+'VOID':										
+"IF PosFuncProfile.""xVoid Transaction"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xVoid Transaction"");"										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Void Transaction"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+'END':										
+"IF PosFuncProfile.""xAt End of Transaction"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xAt End of Transaction"");"										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""End of Transaction"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+'START':										
+"IF PosFuncProfile.""xAt Start of Transaction"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xAt Start of Transaction"");"										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Start of Transaction"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+'MARKUP':										
+"IF PosFuncProfile.""xMark Up"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xMark Up"");"										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Negative Discount Line"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+'MARKDN':										
+"IF PosFuncProfile.""xMark Down"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xMark Down"");"										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Discount Line"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+'REFUND':										
+"IF PosFuncProfile.""xRefund Sale"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xRefund Sale"");"										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Refund Sales"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+'OVERRIDE':										
+"IF PosFuncProfile.""xOverride Price"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xOverride Price"");"										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Override Price in Line"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+//LS7.1-03-										
+'VOID_L':										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Void Line"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END ELSE										
+EXIT(FALSE);										
+//LS7.1-03+										
+'TOTDISC':										
+"IF PosFuncProfile.""xDiscount at Total"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xDiscount at Total"");"										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Discount at Total"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+'TENDER_D':										
+"IF PosFuncProfile.""xTender Declaration"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xTender Declaration"");"										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Tender Declaration"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+										
+'REM_TENDER':										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Remove Tender"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+										
+'FLOAT_ENT':										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Float Entry"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+										
+'INCEXP':										
+BEGIN										
+"IF NOT IncExpAccount.GET(Global.StoreNo,Code) THEN"										
+EXIT(FALSE);										
+"TabSpecInfo.SETRANGE(""Table ID"",DATABASE::""Income/Expense Account"");"										
+"TabSpecInfo.SETRANGE(Value,IncExpAccount.""Primary Key"");"										
+EXIT(TabSpecInfo.FIND('-'));										
+END;										
+'NEGSALE':										
+"IF PosFuncProfile.""xNegative Sales Line"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xNegative Sales Line"");"										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Negative Quantity"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+'NEG_ADJ' :										
+"IF PosFuncProfile.""xNegative adjustment"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xNegative adjustment"");"										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Negative Adjustment"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+										
+'CURRENCY' :										
+"IF TenderTypeCurrSetup.GET(Global.StoreNo,Code2,Code) THEN BEGIN"										
+"TabSpecInfo.SETRANGE(""Table ID"",DATABASE::""Tender Type Currency Setup"");"										
+"TabSpecInfo.SETRANGE(Value,TenderTypeCurrSetup.""Primary Key"");"										
+IF TabSpecInfo.FIND('-') THEN										
+EXIT(TRUE)										
+ELSE										
+EXIT(FALSE);										
+END;										
+										
+'OPENDRAWER':										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Drawer Open"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE SetInfoCode@2(Code@1000 : Code[10]);										
+BEGIN										
+//SetInfoCode										
+InfoCode.GET(Code);										
+CLEAR(TabSpecInfo);										
+"TabSpecInfo.""Table ID"" := 0;"										
+TabSpecInfo.Value := '';										
+"TabSpecInfo.""Infocode Code"" := InfoCode.Code;"										
+END;										
+										
+PROCEDURE NextInfoCode@7(VAR InfoCodeRec@1000 : Record 99001482;LastCanceled@1001 : Boolean;SubCodeInput@1100409000 : Code[20];CodeI	sSe	t@1	10	40	9002 : Boolean) : Boolean;					
+VAR										
+InfoSubCode@1100409001 : Record 99001483;										
+BEGIN										
+//NextInfoCode										
+IF CodeIsSet THEN										
+EXIT(TRUE);										
+IF InfoCode.Code <> '' THEN BEGIN										
+IF InfoCodeRec.Code <> '' THEN BEGIN										
+IF LastCanceled THEN										
+EXIT(FALSE);										
+"IF InfoCodeRec.""Linked Infocode"" <> '' THEN BEGIN"										
+"InfoCodeRec.GET(InfoCodeRec.""Linked Infocode"");"										
+EXIT(TRUE);										
+END										
+ELSE										
+IF (SubCodeInput <> '') THEN BEGIN										
+"IF InfoSubCode.GET(InfoCodeRec.Code,SubCodeInput) THEN BEGIN"										
+"IF (InfoSubCode.""Linked Infocode"" <> '') THEN BEGIN"										
+"InfoCodeRec.GET(InfoSubCode.""Linked Infocode"");"										
+EXIT(TRUE);										
+END;										
+END;										
+END;										
+EXIT(FALSE);										
+END										
+ELSE BEGIN										
+InfoCodeRec := InfoCode;										
+EXIT(TRUE);										
+END;										
+END										
+ELSE BEGIN										
+IF InfoCodeRec.Code <> '' THEN BEGIN										
+IF NOT LastCanceled THEN BEGIN										
+										
+IF (SubCodeInput <> '') THEN BEGIN										
+"IF InfoSubCode.GET(InfoCodeRec.Code,SubCodeInput) THEN BEGIN"										
+"IF (InfoSubCode.""Linked Infocode"" <> '') THEN BEGIN"										
+"InfoCodeRec.GET(InfoSubCode.""Linked Infocode"");"										
+EXIT(TRUE);										
+END;										
+END;										
+END;										
+										
+"IF InfoCodeRec.""Linked Infocode"" <> '' THEN BEGIN"										
+"InfoCodeRec.GET(InfoCodeRec.""Linked Infocode"");"										
+EXIT(TRUE);										
+END;										
+										
+										
+IF TabSpecInfo.NEXT <> 0 THEN BEGIN										
+"InfoCodeRec.GET(TabSpecInfo.""Infocode Code"");"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END										
+ELSE BEGIN										
+										
+IF TabSpecInfo.NEXT <> 0 THEN BEGIN										
+"InfoCodeRec.GET(TabSpecInfo.""Infocode Code"");"										
+EXIT(TRUE);										
+END										
+ELSE										
+EXIT(FALSE);										
+END;										
+END										
+ELSE BEGIN										
+"InfoCodeRec.GET(TabSpecInfo.""Infocode Code"");"										
+EXIT(TRUE);										
+END;										
+END;										
+END;										
+										
+"PROCEDURE IsInfoCodeValid@6(VAR InfoCodeRec@1000 : Record 99001482;Line@1001 : Record 99008981;Requested@1100409001 : 'AutoOnly,All,"	Req	ues	tO	nly	') : Boolean;					
+VAR										
+InfoEntry@1002 : Record 99008982;										
+Item@1100409002 : Record 27;										
+Sign@1003 : Decimal;										
+Trans@1004 : Record 99008980;										
+RetailPriceUtils@1100409000 : Codeunit 99001462;										
+BEGIN										
+//IsInfoCodeValid										
+"IF (TabSpecInfo.Triggering = TabSpecInfo.Triggering::""On Request"") THEN"										
+IF Requested = Requested::AutoOnly THEN										
+EXIT(FALSE);										
+IF (TabSpecInfo.Triggering = TabSpecInfo.Triggering::Automatic) THEN										
+IF Requested = Requested::RequestOnly THEN										
+EXIT(FALSE);										
+										
+"IF NOT RetailPriceUtils.DiscValPerValid(InfoCodeRec.""Infocode Validation Period ID"",TODAY,TIME) THEN"										
+EXIT(FALSE);										
+										
+"IF NOT RetailPriceUtils.SalesTypeFilterPassed(TabSpecInfo.""Sales Type Filter"",Line.""Sales Type"") THEN"										
+EXIT(FALSE);										
+"IF TabSpecInfo.""Unit of Measure"" <> '' THEN"										
+"IF TabSpecInfo.""Unit of Measure"" <> Line.""Unit of Measure"" THEN BEGIN"										
+"IF Line.""Unit of Measure"" <> '' THEN"										
+EXIT(FALSE);										
+IF Item.GET(Line.Number) THEN BEGIN										
+"IF TabSpecInfo.""Unit of Measure"" <> Item.""Sales Unit of Measure"" THEN"										
+EXIT(FALSE);										
+END ELSE										
+EXIT(FALSE);										
+END;										
+										
+"IF InfoCodeRec.""Once per Transaction"" THEN BEGIN"										
+"InfoEntry.SETCURRENTKEY(InfoEntry.""Receipt No."",InfoEntry.Infocode);"										
+"InfoEntry.SETRANGE(InfoEntry.""Receipt No."",Line.""Receipt No."");"										
+"InfoEntry.SETRANGE(InfoEntry.Infocode,InfoCodeRec.Code);"										
+IF InfoEntry.FIND('-') THEN										
+EXIT(FALSE);										
+END;										
+										
+"IF InfoCodeRec.""Random Factor %"" <> 100 THEN BEGIN"										
+IF NOT InfoCodeRec.RandomTrue THEN										
+EXIT(FALSE);										
+END;										
+										
+"IF TabSpecInfo.""Infocode Code"" = InfoCodeRec.Code THEN BEGIN"										
+"IF NOT Trans.GET(Line.""Receipt No."") THEN"										
+EXIT(FALSE);										
+"IF Trans.""Sale Is Return Sale"" THEN"										
+Sign := -Line.Amount										
+ELSE										
+Sign := Line.Amount;										
+										
+"IF TabSpecInfo.""When Required"" = TabSpecInfo.""When Required""::"" "" THEN"										
+EXIT(FALSE);										
+"IF TabSpecInfo.""When Required"" = TabSpecInfo.""When Required""::Negative THEN"										
+IF Sign >= 0 THEN										
+EXIT(FALSE);										
+"IF TabSpecInfo.""When Required"" = TabSpecInfo.""When Required""::Positive THEN"										
+IF Sign <= 0 THEN										
+EXIT(FALSE);										
+END;										
+"IF TabSpecInfo.""Quantity Handling"" <> TabSpecInfo.""Quantity Handling""::""From Infocode"" THEN"										
+"InfoCodeRec.""Quantity Handling"" := TabSpecInfo.""Quantity Handling"" - 1;"										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE IsInputOk@9(InfoCodeRec@1000 : Record 99001482;Input@1001 : Text[100];VAR ErrorTxt@1002 : Text[50];Line@1003 : Record 9900	898	1;V	AR	Ca	nceled@1004 : Boolean;MgrKeyActive@1023 : Boolean;Training@1025 : Boolean;VAR TSError@1024 : Boolean;Quantity@1100409000 : Decimal;SerialNo@1100409001 : Code[20];EntryVariantCode@1100409002 : Code[10];SetPrice@1100409003 : Boolean;NewPrice@1100409004 : Decimal;LinkedLineInserted@1100409005 : Boolean;VAR EntryLineNo@1100409007 : Integer) : Boolean;					
+VAR										
+SubCodeRec@1005 : Record 99001483;										
+InfoEntry@1006 : Record 99008982;										
+TmpInfoEntry@1007 : Record 99008982;										
+Staff@1008 : Record 99001461;										
+Item@1009 : Record 27;										
+Customer@1010 : Record 18;										
+NumSeriesMgm@1011 : Codeunit 396;										
+DataEntryType@1012 : Record 99001557;										
+DataEntry@1013 : Record 99001558;										
+locDataEntry@10012000 : Record 99001558;										
+TmpDate@1014 : Date;										
+Dec@1015 : Decimal;										
+NextNewSubcode@1016 : Code[10];										
+NextCode@1017 : Code[20];										
+NumSer@1018 : Code[10];										
+RLineAmount@1019 : Decimal;										
+Trans@1020 : Record 99008980;										
+InitEntryLoc@1021 : Record 99001469;										
+TsErr@1022 : Integer;										
+ItemTrackingCode@1000000000 : Record 6502;										
+POSTerminal@1000000001 : Record 99001471;										
+ItemLedgerEntry@1000000002 : Record 32;										
+DistributionLocation@1000000004 : Record 99001512;										
+NoOfRecordsFound@1000000005 : Integer;										
+VoucherEntries@1200070000 : Record 99001467;										
+VoucherRemainingAmount@1200070001 : Decimal;										
+NewInput@1200070004 : Text[30];										
+POSTransInfocdeEntryVouchers@10012001 : Record 99008982;										
+OneTimeRedemption@1100409006 : Boolean;										
+lTSErr@1100409008 : TextConst 'ENU=%1 - Unable to update %2;ESP=%1 - Incapaz de actualiz. %2';										
+BEGIN										
+//IsInputOk										
+"IF InfoCodeRec.Type = InfoCodeRec.Type::""Create Data Entry"" THEN"										
+"DataEntryType.GET(InfoCodeRec.""Data Entry Type"");"										
+CLEAR(SubCodeRec);										
+"IF (Input = '') AND (InfoCodeRec.Type <> InfoCodeRec.Type::""Create Data Entry"") THEN BEGIN"										
+"IF InfoCodeRec.""Input Required"" THEN BEGIN"										
+ErrorTxt := Text014;										
+EXIT(FALSE);										
+END										
+ELSE BEGIN										
+Canceled := TRUE;										
+EXIT(TRUE);										
+END;										
+END;										
+"Trans.GET(Line.""Receipt No."");"										
+CASE InfoCodeRec.Type OF										
+InfoCodeRec.Type::Selection:										
+BEGIN										
+IF STRLEN(Input) > 20 THEN BEGIN										
+ErrorTxt := Text015;										
+EXIT(FALSE);										
+END;										
+"SubCodeRec.SETRANGE(Code,InfoCodeRec.Code);"										
+"SubCodeRec.SETRANGE(Subcode,Input);"										
+IF NOT SubCodeRec.FIND('-') THEN BEGIN										
+ErrorTxt := Text016;										
+EXIT(FALSE);										
+END;										
+END;										
+"InfoCodeRec.Type::""Date Input"":"										
+"IF NOT EVALUATE(TmpDate,Input) THEN BEGIN"										
+ErrorTxt := Text017;										
+EXIT(FALSE)										
+END;										
+"InfoCodeRec.Type::""Numeric Input"":"										
+"IF NOT EVALUATE(Dec,Input) THEN BEGIN"										
+ErrorTxt := Text018;										
+EXIT(FALSE)										
+END										
+ELSE BEGIN										
+"IF (InfoCodeRec.""Min. Value"" > Dec) AND (InfoCodeRec.""Min. Value"" <> 0) THEN BEGIN"										
+"ErrorTxt := STRSUBSTNO(Text019,InfoCodeRec.""Min. Value"");"										
+EXIT(FALSE);										
+END;										
+"IF (InfoCodeRec.""Max. Value"" < Dec) AND (InfoCodeRec.""Max. Value"" <> 0) THEN BEGIN"										
+"ErrorTxt := STRSUBSTNO(Text020,InfoCodeRec.""Max. Value"");"										
+EXIT(FALSE);										
+END;										
+END;										
+"InfoCodeRec.Type::""Item Input"":"										
+BEGIN										
+IF STRLEN(Input) > 20 THEN BEGIN										
+ErrorTxt := Text021;										
+EXIT(FALSE);										
+END;										
+IF NOT Item.GET(Input) THEN BEGIN										
+ErrorTxt := Text022;										
+EXIT(FALSE);										
+END;										
+END;										
+"InfoCodeRec.Type::""Customer Input"":"										
+BEGIN										
+IF STRLEN(Input) > 20 THEN BEGIN										
+ErrorTxt := Text023;										
+EXIT(FALSE);										
+END;										
+IF NOT Customer.GET(Input) THEN BEGIN										
+ErrorTxt := Text024;										
+EXIT(FALSE);										
+END;										
+END;										
+"InfoCodeRec.Type::""Staff Input"":"										
+BEGIN										
+IF STRLEN(Input) > 20 THEN BEGIN										
+ErrorTxt := Text025;										
+EXIT(FALSE);										
+END;										
+IF NOT Staff.GET(Input) THEN BEGIN										
+ErrorTxt := Text026;										
+EXIT(FALSE);										
+END;										
+END;										
+"InfoCodeRec.Type::""Create Data Entry"":"										
+BEGIN										
+IF Training THEN										
+EXIT(TRUE);										
+"IF Trans.""Sale Is Return Sale"" THEN"										
+RLineAmount := -Line.Amount										
+ELSE										
+RLineAmount := Line.Amount;										
+"IF Line.""Entry Type"" = Line.""Entry Type""::Payment THEN"										
+RLineAmount := -RLineAmount;										
+"IF Line.""Line No."" = 0 THEN"										
+RLineAmount := 0;										
+"DataEntryType.GET(InfoCodeRec.""Data Entry Type"");"										
+IF Input = '' THEN BEGIN										
+CASE DataEntryType.Numbering OF										
+"DataEntryType.Numbering::""No. Series"" :"										
+"IF DataEntryType.""No. Series"" <> '' THEN BEGIN"										
+"NumSeriesMgm.InitSeries(DataEntryType.""No. Series"",DataEntryType.""No. Series"",0D,NextCode,NumSer);"										
+Input := NextCode;										
+END;										
+DataEntryType.Numbering::Automatic :										
+BEGIN										
+"DataEntry.SETRANGE(""Entry Type"",DataEntryType.Code);"										
+IF DataEntry.FIND('+') THEN										
+"Input := INCSTR(DataEntry.""Entry Code"")"										
+ELSE										
+"Input := FORMAT(InitEntryLoc.GetPOSInitEntryNo(DATABASE::""POS Data Entry"",Line.""Store No."",Line.""POS Terminal No."""	));									
+END;										
+END;										
+END;										
+										
+TSError := FALSE;										
+"IF PosFuncProfile.""TS Data Entries"" THEN BEGIN"										
+"IF NOT TSUtil.GetDataEntry(DataEntryType.Code,Input,DataEntry,TsErr) THEN BEGIN"										
+"NewInput := ReturnDataEntryInput(Input,DataEntryType);"										
+IF NewInput <> '' THEN										
+Input := NewInput;										
+END;										
+										
+"IF TSUtil.GetDataEntry(DataEntryType.Code,Input,DataEntry,TsErr) THEN BEGIN"										
+"IF (DataEntry.""Reserverd By POS No."" <> '') AND (DataEntry.""Reserverd By POS No."" <> Global.TerminalNo) THEN BEGIN"										
+"ErrorTxt := STRSUBSTNO(_GTSReservered,DataEntry.""Reserverd By POS No."");"										
+TSError := TRUE;										
+EXIT(FALSE);										
+END;										
+"DataEntry.""Reserverd By POS No."" := Global.TerminalNo;"										
+"IF PosFuncProfile.""Reserve Data Entry by POS"" THEN BEGIN //LS7.1-01 BEGIN added"										
+//TSUtil.UpdateDataEntry(DataEntry);  //LS7.1-01										
+//LS7.1-01-										
+IF NOT(TSUtil.UpdateDataEntry(DataEntry)) THEN BEGIN										
+TSError := TRUE;										
+"ErrorTxt := STRSUBSTNO(lTSErr,_GTSConnError,DataEntry.TABLECAPTION);"										
+IF NOT MgrKeyActive OR DataEntryType.Refill THEN										
+EXIT(FALSE);										
+END;										
+END;										
+//LS7.1-01+										
+END										
+ELSE BEGIN										
+"NewInput := ReturnDataEntryInput(Input,DataEntryType);"										
+IF NewInput <> '' THEN										
+Input := NewInput;										
+IF (TsErr <> 0) AND (NOT MgrKeyActive OR DataEntryType.Refill) THEN BEGIN										
+TSError := TRUE;										
+ErrorTxt := _GTSConnError + ' (' + FORMAT(TsErr) + ')';										
+EXIT(FALSE);										
+END;										
+END;										
+END;										
+										
+IF NOT DataEntry.RECORDLEVELLOCKING THEN										
+"DataEntry.LOCKTABLE(TRUE,TRUE);"										
+										
+"IF DataEntry.GET(DataEntryType.Code,Input) THEN BEGIN"										
+"IF (DataEntryType.Refill) AND (DataEntry.""Expiring Date"" = 0D) THEN BEGIN"										
+"DataEntry.""Entry Type"" := DataEntryType.Code;"										
+"DataEntry.""Entry Code"" := Input;"										
+DataEntry.Amount := DataEntry.Amount + RLineAmount;										
+"DataEntry.""Created by Receipt No."" := Line.""Receipt No."";"										
+"DataEntry.""Created by Line No."" := Line.""Line No."";"										
+DataEntry.Applied := FALSE;										
+"DataEntry.""Applied by Receipt No."" := '';"										
+"DataEntry.""Applied by Line No."" := 0;"										
+"DataEntry.""Date Applied"" := 0D;"										
+"DataEntry.""Date Created"" := Trans.""Original Date"";"										
+"DataEntry.""Created in Store No."" := Trans.""Store No."";"										
+"IF DataEntryType.""Expiration Policy"" THEN"										
+"DataEntry.""Expiring Date"" := CALCDATE(DataEntryType.""Expiration Formula"",DataEntry.""Date Created"");"										
+DataEntry.MODIFY(TRUE);										
+VoucherRemainingAmount := DataEntry.Amount;										
+END ELSE BEGIN										
+"IF DataEntry.""Created by Receipt No."" <> '' THEN BEGIN"										
+ErrorTxt := Text027;										
+EXIT(FALSE);										
+END;										
+"IF DataEntryType.""Check Amount"" AND (DataEntry.""Applied Amount"" <> RLineAmount) THEN BEGIN"										
+ErrorTxt := Text028;										
+EXIT(FALSE);										
+END;										
+DataEntry.Amount := RLineAmount;										
+"DataEntry.""Created by Receipt No."" := Line.""Receipt No."";"										
+"DataEntry.""Created by Line No."" := Line.""Line No."";"										
+"DataEntry.""Date Created"" := Trans.""Original Date"";"										
+"DataEntry.""Created in Store No."" := Trans.""Store No."";"										
+DataEntry.MODIFY(TRUE);										
+VoucherRemainingAmount := RLineAmount;										
+END;										
+END										
+ELSE BEGIN										
+"DataEntry.""Entry Type"" := DataEntryType.Code;"										
+"DataEntry.""Entry Code"" := Input;"										
+DataEntry.Amount := RLineAmount;										
+"DataEntry.""Applied Amount"" := 0;"										
+"DataEntry.""Created by Receipt No."" := Line.""Receipt No."";"										
+"DataEntry.""Created by Line No."" := Line.""Line No."";"										
+DataEntry.Applied := FALSE;										
+"DataEntry.""Applied by Receipt No."" := '';"										
+"DataEntry.""Applied by Line No."" := 0;"										
+"DataEntry.""Date Applied"" := 0D;"										
+"DataEntry.""Date Created"" := Trans.""Original Date"";"										
+"DataEntry.""Created in Store No."" := Trans.""Store No."";"										
+"IF DataEntryType.""Expiration Policy"" THEN"										
+"DataEntry.""Expiring Date"" := CALCDATE(DataEntryType.""Expiration Formula"",DataEntry.""Date Created"");"										
+DataEntry.INSERT(TRUE);										
+VoucherRemainingAmount := RLineAmount;										
+END;										
+"IF DataEntryType.""Create Voucher Entry"" THEN BEGIN"										
+VoucherEntries.INIT;										
+"VoucherEntries.""Voucher No."" := Input;"										
+"VoucherEntries.""Store No."" := Trans.""Store No."";"										
+"VoucherEntries.""POS Terminal No."" := Trans.""POS Terminal No."";"										
+"VoucherEntries.""Transaction No."" := 0; // NOT FILLED OUT!"										
+"VoucherEntries.""Line No."" := Line.""Line No."";"										
+"VoucherEntries.""Receipt Number"" := Line.""Receipt No."";"										
+VoucherEntries.Unposted := TRUE;										
+"VoucherEntries.""Entry Type"" := VoucherEntries.""Entry Type""::Issued;"										
+"VoucherEntries.Date := Trans.""Original Date"";"										
+VoucherEntries.Time := TIME;										
+VoucherEntries.Amount := RLineAmount;										
+VoucherEntries.Voided := FALSE;										
+"VoucherEntries.""Remaining Amount Now"" := VoucherRemainingAmount;"										
+VoucherEntries.INSERT;										
+END;										
+END;										
+"InfoCodeRec.Type::""Apply To Entry"":"										
+BEGIN										
+IF Training THEN										
+EXIT(TRUE);										
+IF 20 < STRLEN(Input) THEN BEGIN										
+ErrorTxt := Text044;										
+EXIT(FALSE);										
+END;										
+"IF Trans.""Sale Is Return Sale"" THEN"										
+RLineAmount := Line.Amount										
+ELSE										
+RLineAmount := -Line.Amount;										
+"IF Line.""Entry Type"" = Line.""Entry Type""::Payment THEN"										
+RLineAmount := -RLineAmount;										
+"IF Line.""Line No."" = 0 THEN"										
+RLineAmount := 0;										
+"DataEntryType.GET(InfoCodeRec.""Data Entry Type"");"										
+TSError := FALSE;										
+"IF PosFuncProfile.""TS Data Entries"" THEN BEGIN"										
+"IF DataEntry.GET(DataEntryType.Code,Input) THEN"										
+locDataEntry := DataEntry;										
+"IF NOT TSUtil.GetDataEntry(DataEntryType.Code,Input,DataEntry,TsErr) THEN BEGIN"										
+"NewInput := ReturnDataEntryInput(Input,DataEntryType);"										
+IF NewInput <> '' THEN BEGIN										
+Input := NewInput;										
+"IF DataEntry.GET(DataEntryType.Code,Input) THEN"										
+locDataEntry := DataEntry;										
+END;										
+END;										
+"IF TSUtil.GetDataEntry(DataEntryType.Code,Input,DataEntry,TsErr) THEN BEGIN"										
+"IF NOT MgrKeyActive AND (DataEntry.""Reserverd By POS No."" <> '') AND"										
+"(DataEntry.""Reserverd By POS No."" <> Global.TerminalNo) THEN BEGIN"										
+"ErrorTxt := STRSUBSTNO(_GTSReservered,DataEntry.""Reserverd By POS No."");"										
+TSError := TRUE;										
+EXIT(FALSE);										
+END;										
+"IF DataEntry.""Reserverd By POS No."" = Global.TerminalNo THEN"										
+"IF (DataEntryType.""Data Entry Only Allowed"") AND (locDataEntry.Applied) AND"										
+"(NOT DataEntryType.""Create Voucher Entry"") THEN BEGIN"										
+"ErrorTxt := STRSUBSTNO(Text031,InfoCodeRec.""Data Entry Type"",Input);"										
+EXIT(FALSE);										
+END;										
+"DataEntry.""Reserverd By POS No."" := Global.TerminalNo;"										
+										
+"IF PosFuncProfile.""Reserve Data Entry by POS"" THEN BEGIN  //LS7.1-01 BEGIN added"										
+//TSUtil.UpdateDataEntry(DataEntry);  //LS7.1-01										
+//LS7.1-01-										
+IF NOT(TSUtil.UpdateDataEntry(DataEntry)) THEN BEGIN										
+TSError := TRUE;										
+"ErrorTxt := STRSUBSTNO(lTSErr,_GTSConnError,DataEntry.TABLECAPTION);"										
+IF NOT MgrKeyActive OR DataEntryType.Refill THEN										
+EXIT(FALSE);										
+END;										
+END;										
+//LS7.1-01+										
+END										
+ELSE BEGIN										
+"NewInput := ReturnDataEntryInput(Input,DataEntryType);"										
+IF NewInput <> '' THEN										
+Input := NewInput;										
+										
+IF (TsErr <> 0) AND NOT MgrKeyActive THEN BEGIN										
+TSError := TRUE;										
+ErrorTxt := _GTSConnError + ' (' + FORMAT(TsErr) + ')';										
+EXIT(FALSE);										
+END;										
+END;										
+										
+"VoucherRemainingAmount := DataEntry.""Voucher Remaining Amount"";"										
+POSTransInfocdeEntryVouchers.RESET;										
+"POSTransInfocdeEntryVouchers.SETCURRENTKEY(""Receipt No."",Infocode,""Transaction Type"",""Line No."");"										
+"POSTransInfocdeEntryVouchers.SETRANGE(""Receipt No."",Line.""Receipt No."");"										
+"POSTransInfocdeEntryVouchers.SETRANGE(Infocode,InfoCodeRec.Code);"										
+"POSTransInfocdeEntryVouchers.SETRANGE(Information,Input);"										
+"POSTransInfocdeEntryVouchers.SETRANGE(""Source Code"",Line.Number);"										
+"POSTransInfocdeEntryVouchers.SETFILTER(""Line No."",'<>%1',Line.""Line No."");"										
+										
+"POSTransInfocdeEntryVouchers.SETFILTER(Status,'<>%1',POSTransInfocdeEntryVouchers.Status::Voided);"										
+										
+IF POSTransInfocdeEntryVouchers.FINDSET THEN REPEAT										
+VoucherRemainingAmount := VoucherRemainingAmount - POSTransInfocdeEntryVouchers.Amount;										
+UNTIL POSTransInfocdeEntryVouchers.NEXT = 0;										
+END;										
+"IF NOT DataEntry.GET(DataEntryType.Code,Input) THEN BEGIN"										
+"NewInput := ReturnDataEntryInput(Input,DataEntryType);"										
+IF NewInput <> '' THEN										
+Input := NewInput;										
+END;										
+"IF NOT DataEntry.GET(DataEntryType.Code,Input) THEN BEGIN //LS7.1-05"										
+"IF (DataEntryType.""Data Entry Only Allowed"") AND (NOT PosFuncProfile.""TS Data Entries"" OR NOT MgrKeyActive) THEN BEGIN"										
+"ErrorTxt := STRSUBSTNO(Text029,InfoCodeRec.""Data Entry Type"",Input);"										
+EXIT(FALSE);										
+END;										
+"DataEntry.""Entry Type"" := DataEntryType.Code;"										
+"DataEntry.""Entry Code"" := Input;"										
+"DataEntry.""Applied Amount"" := RLineAmount;"										
+DataEntry.Amount := 0;										
+"DataEntry.""Created by Receipt No."" := '';"										
+"DataEntry.""Created by Line No."" := 0;"										
+DataEntry.Applied := TRUE;										
+"DataEntry.""Applied by Receipt No."" := Line.""Receipt No."";"										
+"DataEntry.""Applied by Line No."" := Line.""Line No."";"										
+"DataEntry.""Date Applied"" := Trans.""Original Date"";"										
+DataEntry.INSERT(TRUE);										
+"IF DataEntryType.""Create Voucher Entry"" THEN BEGIN"										
+VoucherEntries.INIT;										
+"VoucherEntries.""Voucher No."" := Input;"										
+"VoucherEntries.""Store No."" := Trans.""Store No."";"										
+"VoucherEntries.""POS Terminal No."" := Trans.""POS Terminal No."";"										
+"VoucherEntries.""Transaction No."" := 0;     //NOT FILLED OUT!"										
+"VoucherEntries.""Line No."" := Line.""Line No."";"										
+"VoucherEntries.""Receipt Number"" := Line.""Receipt No."";"										
+VoucherEntries.Unposted := TRUE;										
+"VoucherEntries.""Entry Type"" := VoucherEntries.""Entry Type""::Redemption;"										
+"VoucherEntries.Date := Trans.""Original Date"";"										
+VoucherEntries.Time := TIME;										
+VoucherEntries.Amount := -RLineAmount;										
+VoucherEntries.Voided := FALSE;										
+"VoucherEntries.""Remaining Amount Now"" := VoucherRemainingAmount - RLineAmount;"										
+VoucherEntries.INSERT;										
+END;										
+END										
+ELSE BEGIN										
+"IF PosFuncProfile.""TS Data Entries"" THEN"										
+"DataEntry.""Voucher Remaining Amount"" := VoucherRemainingAmount"										
+ELSE BEGIN										
+"DataEntry.CALCFIELDS(""Voucher Remaining Amount"");"										
+"VoucherRemainingAmount := DataEntry.""Voucher Remaining Amount"";"										
+END;										
+										
+"IF DataEntry.""Created by Receipt No."" = Line.""Receipt No."" THEN BEGIN"										
+ErrorTxt := Text036;										
+EXIT(FALSE);										
+END;										
+"IF (DataEntryType.""Check Amount"") AND (NOT DataEntryType.""Create Voucher Entry"") THEN"										
+IF DataEntry.Amount <> RLineAmount THEN BEGIN										
+"ErrorTxt := STRSUBSTNO(Text030,RLineAmount);"										
+EXIT(FALSE);										
+END;										
+"IF (DataEntryType.""Expiration Policy"") AND"										
+"(DataEntry.""Expiring Date"" <> 0D) AND (DataEntry.""Expiring Date"" < TODAY) THEN BEGIN"										
+"ErrorTxt := STRSUBSTNO(Text043,InfoCodeRec.""Data Entry Type"",Input);"										
+EXIT(FALSE);										
+END;										
+										
+OneTimeRedemption := FALSE;										
+"IF (DataEntryType.""Check Amount"") AND (DataEntryType.""Create Voucher Entry"") THEN BEGIN"										
+"IF DataEntryType.""Use Full Remaining Balance"" THEN BEGIN"										
+"IF RLineAmount > DataEntry.""Voucher Remaining Amount"" THEN"										
+"RLineAmount := DataEntry.""Voucher Remaining Amount"";"										
+Line.Amount := RLineAmount;										
+"IF  DataEntryType.""One Time Redemption"" THEN"										
+OneTimeRedemption := TRUE;										
+END;										
+"IF PosFuncProfile.""TS Data Entries"" THEN BEGIN"										
+"IF DataEntry.""Voucher Remaining Amount"" - RLineAmount < 0 THEN BEGIN"										
+"ErrorTxt := STRSUBSTNO(Text030,RLineAmount);"										
+EXIT(FALSE);										
+END;										
+END										
+ELSE BEGIN										
+"DataEntry.CALCFIELDS(""Voucher Remaining Amount"");"										
+"IF DataEntry.""Voucher Remaining Amount"" - RLineAmount < 0 THEN BEGIN"										
+"ErrorTxt := STRSUBSTNO(Text030,RLineAmount);"										
+EXIT(FALSE);										
+END;										
+END;										
+END;										
+										
+"IF (DataEntryType.""Data Entry Only Allowed"") AND (DataEntry.Applied) AND"										
+"((NOT DataEntryType.""Create Voucher Entry"") OR (DataEntryType.""Use Full Remaining Balance"")) THEN BEGIN"										
+"ErrorTxt := STRSUBSTNO(Text031,InfoCodeRec.""Data Entry Type"",Input);"										
+EXIT(FALSE);										
+END;										
+IF NOT OneTimeRedemption THEN BEGIN										
+"DataEntry.""Applied Amount"" := DataEntry.""Applied Amount"" + RLineAmount;"										
+"DataEntry.Applied := DataEntry.""Applied Amount"" = DataEntry.Amount;"										
+END ELSE BEGIN										
+"DataEntry.""Applied Amount"" := DataEntry.Amount;"										
+DataEntry.Applied := TRUE;										
+END;										
+"DataEntry.""Applied by Receipt No."" := Line.""Receipt No."";"										
+"DataEntry.""Applied by Line No."" := Line.""Line No."";"										
+"DataEntry.""Date Applied"" := Trans.""Original Date"";"										
+DataEntry.MODIFY(TRUE);										
+"IF DataEntryType.""Create Voucher Entry"" THEN BEGIN"										
+VoucherEntries.INIT;										
+"VoucherEntries.""Voucher No."" := Input;"										
+"VoucherEntries.""Store No."" := Trans.""Store No."";"										
+"VoucherEntries.""POS Terminal No."" := Trans.""POS Terminal No."";"										
+"VoucherEntries.""Transaction No."" := 0;    //NOT FILLED OUT!"										
+"VoucherEntries.""Line No."" := Line.""Line No."";"										
+"VoucherEntries.""Receipt Number"" := Line.""Receipt No."";"										
+VoucherEntries.Unposted := TRUE;										
+"VoucherEntries.""Entry Type"" := VoucherEntries.""Entry Type""::Redemption;"										
+"VoucherEntries.Date := Trans.""Original Date"";"										
+VoucherEntries.Time := TIME;										
+VoucherEntries.Amount := -RLineAmount;										
+VoucherEntries.Voided := FALSE;										
+IF NOT OneTimeRedemption THEN										
+"VoucherEntries.""Remaining Amount Now"" := DataEntry.""Voucher Remaining Amount"" - RLineAmount"										
+ELSE BEGIN										
+"VoucherEntries.""Remaining Amount Now"" := 0;"										
+"VoucherEntries.Amount := -DataEntry.""Voucher Remaining Amount"";"										
+"VoucherEntries.""Write Off Amount"" := DataEntry.""Voucher Remaining Amount"" - RLineAmount;"										
+"VoucherEntries.""One Time Redemption"" := OneTimeRedemption;"										
+END;										
+VoucherEntries.INSERT;										
+END;										
+										
+"IF DataEntryType.""Use Full Remaining Balance"" THEN BEGIN"										
+Line.MODIFY;										
+END;										
+END;										
+END;										
+ELSE BEGIN										
+"IF InfoCodeRec.Type = InfoCodeRec.Type::""Text Input"" THEN"										
+"IF (InfoCodeRec.""Max. Length"" = 0) THEN"										
+"InfoCodeRec.""Max. Length"" := 100;"										
+"IF (InfoCodeRec.""Min. Length"" <> 0) AND"										
+"(STRLEN(Input) < InfoCodeRec.""Min. Length"")"										
+THEN BEGIN										
+"ErrorTxt := STRSUBSTNO(Text032,InfoCodeRec.""Min. Length"");"										
+EXIT(FALSE);										
+END;										
+"IF (InfoCodeRec.""Max. Length"" <> 0) AND"										
+"(STRLEN(Input) > InfoCodeRec.""Max. Length"")"										
+THEN BEGIN										
+"ErrorTxt := STRSUBSTNO(Text033,InfoCodeRec.""Max. Length"");"										
+EXIT(FALSE);										
+END;										
+END;										
+END;										
+										
+InfoEntry.INIT;										
+IF Quantity = 0 THEN										
+Quantity := 1;										
+										
+"IF Line.""Line No."" = 0 THEN BEGIN"										
+"InfoEntry.""Receipt No."" := Line.""Receipt No."";"										
+"InfoEntry.""Transaction Type"" := InfoEntry.""Transaction Type""::Header;"										
+"InfoEntry.""Line No."" := 0;"										
+InfoEntry.Infocode := InfoCodeRec.Code;										
+"InfoEntry.""Store No."" := Global.StoreNo;"										
+"InfoEntry.Information := COPYSTR(Input,1,30);"										
+InfoEntry.Date := TODAY;										
+InfoEntry.Time := TIME;										
+"InfoEntry.""POS Terminal No."" := Global.TerminalNo;"										
+"InfoEntry.""Staff ID"" := Global.StaffID;"										
+"InfoEntry.""No."" := '';"										
+"InfoEntry.""Type of Input"" := InfoCodeRec.Type;"										
+InfoEntry.Subcode := SubCodeRec.Subcode;										
+InfoEntry.Amount := 0;										
+"InfoEntry.""Source Code"" := '';"										
+"InfoEntry.""Selected Quantity"" := Quantity;"										
+"InfoEntry.""Serial No."" := SerialNo;"										
+"InfoEntry.""Entry Variant Code"" := EntryVariantCode;"										
+"InfoEntry.""Entry Trigger Function"" := SubCodeRec.""Trigger Function"";"										
+"InfoEntry.""Entry Trigger Code"" := SubCodeRec.""Trigger Code"";"										
+"InfoEntry.""Set Price"" := SetPrice;"										
+"InfoEntry.""New Price"" := NewPrice;"										
+"InfoEntry.""Skip Posting to Info. Entry"" := FALSE;"										
+"InfoEntry.""Line Inserted and Linked"" := LinkedLineInserted;"										
+END										
+ELSE BEGIN										
+"InfoEntry.""Receipt No."" := Line.""Receipt No."";"										
+										
+"IF (POSActions.""Action Trigger"" = POSActions.""Action Trigger""::""Discount at Total"") THEN BEGIN"										
+"InfoEntry.""Transaction Type"" := InfoEntry.""Transaction Type""::Header;"										
+END										
+ELSE BEGIN										
+"CASE Line.""Entry Type"" OF"										
+"Line.""Entry Type""::Item :"										
+"InfoEntry.""Transaction Type"" := InfoEntry.""Transaction Type""::""Sales Entry"";"										
+"Line.""Entry Type""::Payment :"										
+"InfoEntry.""Transaction Type"" := InfoEntry.""Transaction Type""::""Payment Entry"";"										
+"Line.""Entry Type""::IncomeExpense :"										
+"InfoEntry.""Transaction Type"" := InfoEntry.""Transaction Type""::""Income/Expense Entry"";"										
+END;										
+END;										
+InfoEntry.Infocode := InfoCodeRec.Code;										
+"InfoEntry.""Store No."" := Global.StoreNo;"										
+InfoEntry.Information := Input;										
+InfoEntry.Date := TODAY;										
+InfoEntry.Time := TIME;										
+"InfoEntry.""POS Terminal No."" := Global.TerminalNo;"										
+"InfoEntry.""Staff ID"" := Global.StaffID;"										
+"InfoEntry.""Type of Input"" := InfoCodeRec.Type;"										
+InfoEntry.Subcode := SubCodeRec.Subcode;										
+"InfoEntry.""Selected Quantity"" := Quantity;"										
+"InfoEntry.""Serial No."" := SerialNo;"										
+"InfoEntry.""Entry Variant Code"" := EntryVariantCode;"										
+"InfoEntry.""Entry Trigger Function"" := SubCodeRec.""Trigger Function"";"										
+"InfoEntry.""Entry Trigger Code"" := SubCodeRec.""Trigger Code"";"										
+"InfoEntry.""Set Price"" := SetPrice;"										
+"InfoEntry.""New Price"" := NewPrice;"										
+"InfoEntry.""Skip Posting to Info. Entry"" := FALSE;"										
+"InfoEntry.""Line Inserted and Linked"" := LinkedLineInserted;"										
+END;										
+										
+"IF InfoCodeRec.Type = InfoCodeRec.Type::""Numeric Input"" THEN BEGIN"										
+"IF InfoCodeRec.""Value is Amt./Qty."" THEN"										
+"IF NOT EVALUATE(InfoEntry.""Info. Amt."",Input) THEN"										
+"InfoEntry.""Info. Amt."" := 0;"										
+END;										
+"IF InfoCodeRec.""Std 1. in Value"" AND (InfoEntry.""Info. Amt."" = 0) THEN"										
+"InfoEntry.""Info. Amt."" := 1;"										
+										
+Line.SETRECFILTER;										
+"IF (SubCodeRec.""Trigger Function"" = SubCodeRec.""Trigger Function""::""Discount Gr."") AND"										
+"(InfoEntry.""Transaction Type"" = InfoEntry.""Transaction Type""::""Sales Entry"")"										
+THEN BEGIN										
+"Line.SETRANGE(""Line No."");"										
+Line.FINDFIRST;										
+REPEAT										
+"IF InfoEntry.""Transaction Type"" <> InfoEntry.""Transaction Type""::Header THEN BEGIN"										
+"InfoEntry.""Line No."" := Line.""Line No."";"										
+"IF (Line.""Entry Type"" = Line.""Entry Type""::TotalDiscount) AND (Line.""Discount %"" <> 0) THEN"										
+"InfoEntry.Amount := Line.Amount / Line.""Discount %"" * 100"										
+ELSE										
+InfoEntry.Amount := Line.Amount;										
+"InfoEntry.""Source Code"" := Line.Number;"										
+"InfoEntry.""Variant Code"" := Line.""Variant Code"";"										
+END;										
+IF NOT InfoEntry.INSERT THEN BEGIN										
+"//LS7.1-02      IF InfoCodeRec.""Multiple Selection"" THEN BEGIN"										
+"IF InfoCodeRec.""Multiple Selection"" OR (InfoCodeRec.""Quantity Handling"" = InfoCodeRec.""Quantity Handling""::""Select Items up"	to	Qty	"."""	) T	HEN BEGIN  //LS7.1-02					
+TmpInfoEntry.RESET;										
+"TmpInfoEntry.SETRANGE(""Receipt No."",InfoEntry.""Receipt No."");"										
+"TmpInfoEntry.SETRANGE(""Transaction Type"",InfoEntry.""Transaction Type"");"										
+"TmpInfoEntry.SETRANGE(""Line No."",InfoEntry.""Line No."");"										
+"TmpInfoEntry.SETRANGE(Infocode,InfoEntry.Infocode);"										
+IF TmpInfoEntry.FINDLAST THEN BEGIN										
+"InfoEntry.""Entry Line No."" := TmpInfoEntry.""Entry Line No."" + 10000;"										
+InfoEntry.INSERT;										
+END;										
+END ELSE BEGIN										
+TmpInfoEntry.GET(										
+"InfoEntry.""Receipt No."",InfoEntry.""Transaction Type"",InfoEntry.""Line No."","										
+"InfoEntry.Infocode,InfoEntry.""Entry Line No."");"										
+"TmpInfoEntry.TRANSFERFIELDS(InfoEntry,FALSE);"										
+TmpInfoEntry.MODIFY;										
+END;										
+END;										
+UNTIL Line.NEXT = 0;										
+END										
+ELSE BEGIN										
+"IF InfoEntry.""Transaction Type"" <> InfoEntry.""Transaction Type""::Header THEN BEGIN"										
+"InfoEntry.""Line No."" := Line.""Line No."";"										
+"IF (Line.""Entry Type"" = Line.""Entry Type""::TotalDiscount) AND (Line.""Discount %"" <> 0) THEN"										
+"InfoEntry.Amount := Line.Amount / Line.""Discount %"" * 100"										
+ELSE										
+InfoEntry.Amount := Line.Amount;										
+"InfoEntry.""Source Code"" := Line.Number;"										
+"InfoEntry.""Variant Code"" := Line.""Variant Code"";"										
+END;										
+IF NOT InfoEntry.INSERT THEN BEGIN										
+"//LS7.1-02  IF InfoCodeRec.""Multiple Selection"" THEN BEGIN"										
+"IF InfoCodeRec.""Multiple Selection"" OR (InfoCodeRec.""Quantity Handling"" = InfoCodeRec.""Quantity Handling""::""Select Items up to"	Qt	"y."""	)	THE	N BEGIN  //LS7.1-02					
+TmpInfoEntry.RESET;										
+"TmpInfoEntry.SETRANGE(""Receipt No."",InfoEntry.""Receipt No."");"										
+"TmpInfoEntry.SETRANGE(""Transaction Type"",InfoEntry.""Transaction Type"");"										
+"TmpInfoEntry.SETRANGE(""Line No."",InfoEntry.""Line No."");"										
+"TmpInfoEntry.SETRANGE(Infocode,InfoEntry.Infocode);"										
+IF TmpInfoEntry.FINDLAST THEN BEGIN										
+"InfoEntry.""Entry Line No."" := TmpInfoEntry.""Entry Line No."" + 10000;"										
+InfoEntry.INSERT;										
+END;										
+END ELSE BEGIN										
+TmpInfoEntry.GET(										
+"InfoEntry.""Receipt No."",InfoEntry.""Transaction Type"",InfoEntry.""Line No."","										
+"InfoEntry.Infocode,InfoEntry.""Entry Line No."");"										
+"TmpInfoEntry.TRANSFERFIELDS(InfoEntry,FALSE);"										
+TmpInfoEntry.MODIFY;										
+END;										
+END;										
+END;										
+"EntryLineNo := InfoEntry.""Entry Line No."";"										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE RemoveInfoCode@1100409000(PosTransLine@1100409000 : Record 99008981;Module@1100409001 : Code[10]);										
+VAR										
+InfoEntry@1100409002 : Record 99008982;										
+Store@10012000 : Record 99001470;										
+DeleteInfoEntry@1100409003 : Boolean;										
+BEGIN										
+//RemoveInfoCode										
+Store.GET(Global.StoreNo);										
+PosFuncProfile.GET(Global.FunctionalityProfileID);										
+DeleteInfoEntry := FALSE;										
+CASE Module OF										
+'MARKUP':										
+"IF PosFuncProfile.""xMark Up"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xMark Up"");"										
+DeleteInfoEntry := TRUE;										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Negative Discount Line"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+DeleteInfoEntry := TRUE;										
+END										
+END;										
+'MARKDN':										
+"IF PosFuncProfile.""xMark Down"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xMark Down"");"										
+DeleteInfoEntry := TRUE;										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Discount Line"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+DeleteInfoEntry := TRUE;										
+END										
+END;										
+'NEGSALE':										
+"IF PosFuncProfile.""xNegative Sales Line"" <> '' THEN BEGIN"										
+"InfoCode.GET(PosFuncProfile.""xNegative Sales Line"");"										
+DeleteInfoEntry := TRUE;										
+END										
+ELSE BEGIN										
+"IF InfocodePOSActionExists(POSActions.""Action Trigger""::""Negative Quantity"",POSActionInfocode) THEN BEGIN"										
+InfoCode.GET(POSActionInfocode);										
+DeleteInfoEntry := TRUE;										
+END										
+END;										
+END;										
+										
+IF DeleteInfoEntry THEN BEGIN										
+InfoEntry.RESET;										
+"InfoEntry.SETRANGE(""Receipt No."",PosTransLine.""Receipt No."");"										
+"InfoEntry.SETRANGE(""Transaction Type"",InfoEntry.""Transaction Type""::""Sales Entry"");"										
+"InfoEntry.SETRANGE(""Line No."",PosTransLine.""Line No."");"										
+"InfoEntry.SETRANGE(Infocode,InfoCode.Code);"										
+InfoEntry.DELETEALL;										
+END;										
+END;										
+										
+PROCEDURE InfocodePOSActionExists@1100409001(ActionTrigger@1100409000 : Integer;VAR InfCode@1100409001 : Code[10]) : Boolean;										
+BEGIN										
+//InfocodePOSActionExists										
+										
+InfCode := '';										
+POSActions.RESET;										
+"POSActions.SETCURRENTKEY(Relation,""Relation Code"",""Action Trigger"",""Data Trigger"",""Data ID"",""Execution Location"",""Sequence No."");"										
+"POSActions.SETRANGE(POSActions.Active,TRUE);"										
+"POSActions.SETRANGE(Relation,POSActions.Relation::""Func. Profile"");"										
+"POSActions.SETRANGE(""Relation Code"",PosFuncProfile.""Profile ID"");"										
+"POSActions.SETRANGE(""Action Trigger"",ActionTrigger);"										
+"POSActions.SETRANGE(""Data Trigger"",POSActions.""Data Trigger""::"" "");"										
+"POSActions.SETFILTER(""Data ID"",'%1','');"										
+"POSActions.SETRANGE(""Do Action"",POSActions.""Do Action""::Infocode);"										
+"POSActions.SETFILTER(""Action ID"",'<>%1','');"										
+IF POSActions.FIND('-') THEN BEGIN										
+"InfCode := POSActions.""Action ID"";"										
+EXIT(TRUE);										
+END;										
+"POSActions.SETRANGE(Relation,POSActions.Relation::Global);"										
+"POSActions.SETFILTER(""Relation Code"",'%1','');"										
+IF POSActions.FIND('-') THEN BEGIN										
+"InfCode := POSActions.""Action ID"";"										
+EXIT(TRUE);										
+END;										
+EXIT(FALSE);										
+END;										
+										
+PROCEDURE ReturnDataEntryInput@1200070000(Inp@1200070000 : Text[30];POSDataEntryType@1200070001 : Record 99001557) NewInput : Text[3	0];									
+VAR										
+BarcodeMask@1200070004 : Record 99001459;										
+BarcodeMaskCharacter@1200070003 : Record 99001536;										
+MaskChar@1200070002 : Integer;										
+IInput@1200070005 : Integer;										
+IMask@1200070006 : Integer;										
+NoSeriesLine@1100409001 : Record 309;										
+Found@1100409000 : Boolean;										
+IPreFix@1100409002 : Integer;										
+BEGIN										
+//ReturnDataEntryInput										
+										
+NewInput := '';										
+"IF POSDataEntryType.""Barcode Mask Entry No"" <> 0 THEN"										
+"IF BarcodeMask.GET(POSDataEntryType.""Barcode Mask Entry No"") THEN BEGIN"										
+IInput := STRLEN(Inp);										
+IMask := STRLEN(BarcodeMask.Mask);										
+IF (IInput = IMask) THEN BEGIN										
+IPreFix := STRLEN(BarcodeMask.Prefix);										
+"IF BarcodeMask.Prefix = COPYSTR(Inp,1,IPreFix) THEN"										
+WHILE IInput > 0 DO BEGIN										
+"BarcodeMaskCharacter.SETRANGE(Character,COPYSTR(BarcodeMask.Mask,IMask,1));"										
+IF BarcodeMaskCharacter.FIND('-') THEN										
+"IF BarcodeMaskCharacter.""Character Type"" = BarcodeMaskCharacter.""Character Type""::""Data Entry"" THEN"										
+"NewInput := COPYSTR(Inp,IInput,1) + NewInput;"										
+IInput := IInput - 1;										
+IMask := IMask - 1;										
+END;										
+END;										
+END;										
+IF POSDataEntryType.Numbering = POSDataEntryType.Numbering::Automatic THEN										
+"NewInput := DELCHR(NewInput,'<','0')"										
+ELSE BEGIN										
+"IF POSDataEntryType.Numbering = POSDataEntryType.Numbering::""No. Series"" THEN BEGIN"										
+"NoSeriesLine.SETRANGE(""Series Code"",POSDataEntryType.""No. Series"");"										
+Found := FALSE;										
+IF NoSeriesLine.FINDFIRST THEN										
+REPEAT										
+"IF (NewInput >= NoSeriesLine.""Starting No."") AND"										
+"((NewInput <= NoSeriesLine.""Ending No."") OR (NoSeriesLine.""Ending No."" = ''))"										
+THEN BEGIN										
+Found := TRUE;										
+"IF STRLEN(DELCHR(NewInput,'<','0')) < STRLEN(NoSeriesLine.""Starting No."") THEN"										
+NewInput :=										
+"COPYSTR(NewInput,STRLEN(NewInput) - STRLEN(NoSeriesLine.""Starting No."") + 1,"										
+"STRLEN(NoSeriesLine.""Starting No.""))"										
+ELSE										
+"NewInput := DELCHR(NewInput,'<','0');"										
+END;										
+UNTIL (NoSeriesLine.NEXT = 0) OR Found;										
+END;										
+END;										
+END;										
+										
+PROCEDURE ViewVoucherEntries@1100409002(VoucherNo@1100409009 : Code[20];VAR TsError@1100409001 : Integer;VAR ErrorTxt@1100409000 : T	ext	[25	0]	) :	Boolean;					
+VAR										
+Store@1100409002 : Record 99001470;										
+PosFuncProfile@1100409003 : Record 99001515;										
+TmpVoucherEntry@1100409004 : TEMPORARY Record 99001467;										
+VoucherEntry@1100409010 : Record 99001467;										
+RecRef@1100409005 : RecordRef;										
+FormID@1100409006 : Code[20];										
+EPOSLookupForm@1100409007 : Page 99008958;										
+Lookup@1100409008 : Record 99008922;										
+POSTerminal@1100409011 : Record 99001471;										
+POSGuiProfile@1100409012 : Record 99008933;										
+CurrlineTemp@1100409013 : Record 99008981;										
+BEGIN										
+//ViewVoucherEntries										
+Store.GET(Global.StoreNo);										
+PosFuncProfile.GET(Global.FunctionalityProfileID);										
+POSTerminal.GET(Global.TerminalNo);										
+POSGuiProfile.GET(Global.InterfaceProfileID);										
+										
+"IF PosFuncProfile.""TS Data Entries"" THEN BEGIN"										
+{  //LS7.1-01										
+"TSUtil.GetOpenVoucherEntry(VoucherNo,TmpVoucherEntry,TsError);"										
+IF TsError <> 0 THEN										
+EXIT(FALSE);										
+}  //LS7.1-01										
+//LS7.1-01-										
+"IF NOT(TSUtil.GetOpenVoucherEntry(VoucherNo,TmpVoucherEntry,TsError)) THEN"										
+EXIT(FALSE);										
+//LS7.1-01+										
+END ELSE BEGIN										
+"VoucherEntry.SETRANGE(""Voucher No."",VoucherNo);"										
+IF VoucherEntry.FINDSET THEN										
+REPEAT										
+TmpVoucherEntry.INIT;										
+TmpVoucherEntry := VoucherEntry;										
+TmpVoucherEntry.INSERT;										
+UNTIL VoucherEntry.NEXT = 0;										
+END;										
+										
+IF TmpVoucherEntry.COUNT <= 0 THEN BEGIN										
+ErrorTxt := Text041;										
+EXIT(FALSE);										
+END;										
+										
+RecRef.GETTABLE(TmpVoucherEntry);										
+										
+FormID := 'VOUCHERS';										
+"IF Global.GetPosLookupRec(FormID,Lookup) THEN BEGIN"										
+"PosGUI.Lookup(Lookup, '', CurrlineTemp, Global.MgrKey, '', RecRef);"										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE ViewDataEntryBalance@1100409003(DataEntryType@1100409005 : Code[20];DataEntryNo@1100409002 : Code[20];VAR TsError@11004090	1	: I	nt	ege	r;VAR Balance@1100409003 : Decimal;VAR ErrorTxt@1100409000 : Text[250]) : Boolean;					
+VAR										
+Store@1100409006 : Record 99001470;										
+DataEntry@1100409004 : Record 99001558;										
+HasExpired@1100409007 : Boolean;										
+BEGIN										
+//ViewDataEntryBalance										
+Store.GET(Global.StoreNo);										
+PosFuncProfile.GET(Global.FunctionalityProfileID);										
+										
+"IF PosFuncProfile.""TS Data Entries"" THEN BEGIN"										
+{  //LS7.1-01										
+"TSUtil.GetDataEntryBalance(DataEntryType,DataEntryNo,TsError,Balance,ErrorTxt);"										
+IF TsError <> 0 THEN										
+EXIT(FALSE);										
+}  //LS7.1-1										
+//LS7.1-01-										
+"IF NOT(TSUtil.GetDataEntryBalance(DataEntryType,DataEntryNo,TsError,Balance,ErrorTxt)) THEN"										
+EXIT(FALSE);										
+//LS7.1-01+										
+END ELSE BEGIN										
+"DataEntry.SETRANGE(""Entry Type"",DataEntryType);"										
+"DataEntry.SETRANGE(""Entry Code"",DataEntryNo);"										
+IF DataEntry.FINDSET THEN BEGIN										
+REPEAT										
+HasExpired := FALSE;										
+"IF (DataEntry.""Expiring Date"" <> 0D) AND (DataEntry.""Expiring Date"" < TODAY) THEN"										
+HasExpired := TRUE;										
+IF (NOT DataEntry.Applied) AND (NOT HasExpired) THEN										
+"Balance += DataEntry.Amount - DataEntry.""Applied Amount"";"										
+UNTIL DataEntry.NEXT = 0;										
+END ELSE BEGIN										
+ErrorTxt := Text042;										
+EXIT(FALSE);										
+END;										
+END;										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE CloseExpiredEntries@1100409004(EntryType@1100409000 : Code[20]);										
+VAR										
+DataEntryType@1100409003 : Record 99001557;										
+DataEntry@1100409001 : Record 99001558;										
+DataEntry2@1100409002 : Record 99001558;										
+VoucherEntries@1100409004 : Record 99001467;										
+lText001@1100409005 : TextConst 'ENU=Expired;ESP=Caducado';										
+VoucherEntries2@1100409006 : Record 99001467;										
+StatWin@1100409007 : Dialog;										
+lText002@1100409008 : TextConst 'ENU=Close Expired Entries;ESP=Cerrar Movs. Caducados';										
+lText003@1100409009 : TextConst 'ENU=Entry Type #2####################\;ESP=Tipo Mov. #2####################\';										
+lText004@1100409010 : TextConst 'ENU=Entry Code #3####################\\;ESP=C¢d. Mov. #3####################\\';										
+CurrRecCount@1100409011 : Integer;										
+MacRecCount@1100409012 : Integer;										
+BEGIN										
+//CloseExpiredEntries										
+DataEntryType.GET(EntryType);										
+										
+IF GUIALLOWED THEN BEGIN										
+StatWin.OPEN('#1###############################\' +										
+lText003 +										
+lText004 +										
+'@4@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@');										
+"StatWin.UPDATE(1,lText002);"										
+"StatWin.UPDATE(2,EntryType);"										
+END;										
+										
+DataEntry.RESET;										
+"DataEntry.SETCURRENTKEY(""Entry Type"",Applied);"										
+"DataEntry.SETRANGE(""Entry Type"",EntryType);"										
+"DataEntry.SETRANGE(Applied,FALSE);"										
+CurrRecCount := 0;										
+MacRecCount := DataEntry.COUNT;										
+IF DataEntry.FIND('-') THEN										
+REPEAT										
+CurrRecCount := CurrRecCount + 1;										
+IF GUIALLOWED THEN BEGIN										
+IF (CurrRecCount = 1) OR (CurrRecCount MOD 10 = 0) THEN BEGIN										
+"StatWin.UPDATE(3,DataEntry.""Entry Code"");"										
+"StatWin.UPDATE(4,ROUND(CurrRecCount/MacRecCount*10000,1.0,'<'));"										
+END;										
+END;										
+										
+"IF (DataEntry.""Expiring Date"" <> 0D) AND (DataEntry.""Expiring Date"" < TODAY()) THEN BEGIN"										
+"DataEntry.CALCFIELDS(""Voucher Remaining Amount"");"										
+"DataEntry2.GET(DataEntry.""Entry Type"",DataEntry.""Entry Code"");"										
+"DataEntry2.""Applied Amount"" := DataEntry2.Amount;"										
+"DataEntry2.Applied := DataEntry2.""Applied Amount"" = DataEntry2.Amount;"										
+"DataEntry2.""Applied by Receipt No."" := lText001;"										
+"DataEntry2.""Date Applied"" := TODAY();"										
+DataEntry2.MODIFY(TRUE);										
+"IF DataEntryType.""Create Voucher Entry"" THEN BEGIN"										
+VoucherEntries.RESET;										
+"VoucherEntries.SETCURRENTKEY(""Voucher No."",""Entry Type"",Voided);"										
+"VoucherEntries.SETRANGE(""Voucher No."",DataEntry.""Entry Code"");"										
+"VoucherEntries.SETRANGE(""Entry Type"",VoucherEntries.""Entry Type""::Issued);"										
+"VoucherEntries.SETRANGE(Voided,FALSE);"										
+IF VoucherEntries.FIND('-') THEN BEGIN										
+VoucherEntries2.INIT;										
+"VoucherEntries2.""Voucher No."" := VoucherEntries.""Voucher No."";"										
+"VoucherEntries2.""Store No."" := VoucherEntries.""Store No."";"										
+"VoucherEntries2.""POS Terminal No."" := VoucherEntries.""POS Terminal No."";"										
+"VoucherEntries2.""Transaction No."" := VoucherEntries.""Transaction No."";"										
+"VoucherEntries2.""Line No."" := VoucherEntries.""Line No."";"										
+"VoucherEntries2.""Receipt Number"" := DataEntry2.""Applied by Receipt No."";"										
+VoucherEntries2.Unposted := FALSE;										
+"VoucherEntries2.""Entry Type"" := VoucherEntries.""Entry Type""::Redemption;"										
+"VoucherEntries2.Date := DataEntry2.""Date Applied"";"										
+VoucherEntries2.Time := TIME;										
+"VoucherEntries2.Amount := -DataEntry.""Voucher Remaining Amount"";"										
+VoucherEntries2.Voided := FALSE;										
+"VoucherEntries2.""Remaining Amount Now"" := 0;"										
+"VoucherEntries2.""Write Off Amount"" := DataEntry.""Voucher Remaining Amount"";"										
+VoucherEntries2.INSERT;										
+END;										
+END;										
+END;										
+UNTIL DataEntry.NEXT = 0;										
+										
+IF GUIALLOWED THEN										
+StatWin.CLOSE;										
+END;										
+										
+PROCEDURE GetCrossSellingItems@1100409005(pItemNo@1100409000 : Code[20];VAR pCrossSellingItemBuffer@1100409001 : TEMPORARY Record 10	12	867	);							
+VAR										
+SpecificInfocode@1100409002 : Record 99001479;										
+BEGIN										
+//GetCrossSellingItems										
+//LS7.1-04 New Function										
+										
+SpecificInfocode.RESET;										
+"SpecificInfocode.SETRANGE(""Table ID"",27);"										
+"SpecificInfocode.SETRANGE(Value,pItemNo);"										
+"SpecificInfocode.SETRANGE(""Usage Category"",SpecificInfocode.""Usage Category""::""Cross-selling"");"										
+IF SpecificInfocode.FINDSET THEN										
+REPEAT										
+"InsertCrossSellingItems(SpecificInfocode.""Infocode Code"",pCrossSellingItemBuffer);"										
+UNTIL SpecificInfocode.NEXT = 0;										
+END;										
+										
+LOCAL PROCEDURE InsertCrossSellingItems@1100409008(pInfocode@1100409001 : Code[10];VAR pCrossSellingItemBuffer@1100409000 : TEMPORAR	Y R	eco	rd	10	012867);					
+VAR										
+Infocode@1100409002 : Record 99001482;										
+InfoSubcode@1100409003 : Record 99001483;										
+BEGIN										
+//InsertCrossSellingItems										
+//LS7.1-04 New Function										
+										
+IF Infocode.GET(pInfocode) THEN BEGIN										
+"InfoSubcode.SETRANGE(Code,Infocode.Code);"										
+IF InfoSubcode.FINDSET THEN										
+REPEAT										
+"IF InfoSubcode.""Trigger Function"" = InfoSubcode.""Trigger Function""::Infocode THEN BEGIN"										
+"InsertCrossSellingItems(InfoSubcode.""Trigger Code"",pCrossSellingItemBuffer);"										
+"END ELSE IF InfoSubcode.""Trigger Function"" = InfoSubcode.""Trigger Function""::Item THEN BEGIN"										
+"IF NOT pCrossSellingItemBuffer.GET(InfoSubcode.""Trigger Code"") THEN BEGIN"										
+pCrossSellingItemBuffer.INIT;										
+"pCrossSellingItemBuffer.""Item No."" := InfoSubcode.""Trigger Code"";"										
+pCrossSellingItemBuffer.INSERT;										
+END;										
+END;										
+UNTIL InfoSubcode.NEXT = 0;										
+END;										
+END;										
+										
+BEGIN										
+{										
+LS7.1-01 GL #26226# - Act on return values in TSUtil Function calls										
+"LS7.1-02 GEG #24625#   13.01.2014 - When quantity handling is select up to quantity, multiple selection should be true"										
+LS7.1-03 GEG #26622#   31.01.2014 - VOID_L put in										
+LS7.1-04 StK #NAV-531# 05.03.2014 - Add new functions to get Cross-Selling items.										
+LS7.1-05 AM  #NAV-699# 03.04.2014 - Overflow when barcode too long.										
+}										
+END.										
+}										
+}										
+										

@@ -1,0 +1,50 @@
+OBJECT Codeunit 99008912 POS Global Refund Utility										
+{										
+OBJECT-PROPERTIES										
+{										
+Date=01/03/13;										
+Time=12:00:00 p.m.;										
+Version List=LSW17.0;										
+}										
+PROPERTIES										
+{										
+OnRun=BEGIN										
+END;										
+										
+}										
+CODE										
+{										
+VAR										
+GR_Text01@1200070003 : TextConst 'ENU=The Receipt amount is below minimum;ESP=El Importe del Recibo est  por debajo del m¡nimo';										
+RetailSetup@1200070010 : Record 10000700;										
+ReadCardNo@1200070008 : Page 99008986;										
+ErrorMessage@1200070004 : Text[80];										
+GR_Text02@1200070005 : TextConst 'ENU=There are no refundable items in this transaction;ESP=No hay productos que puedan devolverse	en	es	ta	tr	ansacci¢n';					
+GR_Text03@1200070007 : TextConst 'ENU=Invalid Credit Card information;ESP=Informaci¢n de Tarjeta de Cr‚dito Inv lida';										
+										
+PROCEDURE Init@1200070000() : Boolean;										
+BEGIN										
+END;										
+										
+PROCEDURE PrintGlobalRefundCheck@1200070001(Trans@1200070000 : Record 99001472) : Boolean;										
+VAR										
+TransLine@1200070001 : Record 99001473;										
+Item@1200070002 : Record 27;										
+POSVat@1200070003 : Record 99001560;										
+CheckSum@1200070004 : Decimal;										
+DayNow@1200070005 : Date;										
+CardNo@1200070006 : Code[20];										
+ExpDate@1200070007 : Date;										
+BEGIN										
+END;										
+										
+PROCEDURE GetErrorTxt@1200070002() : Text[80];										
+BEGIN										
+EXIT(ErrorMessage);										
+END;										
+										
+BEGIN										
+END.										
+}										
+}										
+										

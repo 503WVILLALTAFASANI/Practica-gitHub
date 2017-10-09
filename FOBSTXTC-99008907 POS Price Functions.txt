@@ -1,0 +1,247 @@
+OBJECT Codeunit 99008907 POS Price Functions										
+{										
+OBJECT-PROPERTIES										
+{										
+Date=25/01/10;										
+Time=12:00:00 p.m.;										
+Version List=LSW16.1;										
+}										
+PROPERTIES										
+{										
+OnRun=BEGIN										
+END;										
+										
+}										
+CODE										
+{										
+VAR										
+intBuff@1000 : ARRAY [250] OF Integer;										
+decBuff1@1001 : ARRAY [250] OF Decimal;										
+decBuff2@1002 : ARRAY [250] OF Decimal;										
+codeBuff@1003 : ARRAY [250] OF Code[20];										
+buffCount@1004 : Integer;										
+										
+PROCEDURE ResetList@5();										
+BEGIN										
+//ResetList										
+buffCount := 0;										
+END;										
+										
+PROCEDURE AddToList@2(intVal@1000 : Integer;decVal1@1001 : Decimal;decVal2@1002 : Decimal;codeVal@1003 : Code[20]);										
+VAR										
+i@1004 : Integer;										
+BEGIN										
+//AddToList										
+FOR i := 1 TO buffCount DO										
+IF intBuff[i] = intVal THEN BEGIN										
+decBuff2[i] := decBuff2[i] + decVal2;										
+EXIT;										
+END;										
+										
+buffCount := buffCount + 1;										
+intBuff[buffCount] := intVal;										
+decBuff1[buffCount] := decVal1;										
+decBuff2[buffCount] := decVal2;										
+codeBuff[buffCount] := codeVal;										
+END;										
+										
+PROCEDURE GetLargestList@3(VAR intVal@1001 : Integer;VAR decVal1@1002 : Decimal;VAR decVal2@1003 : Decimal) : Boolean;										
+VAR										
+maxIndex@1004 : Integer;										
+maxVal@1005 : Decimal;										
+i@1006 : Integer;										
+minLineNo@1007 : Integer;										
+BEGIN										
+//GetLargestList										
+minLineNo := 2000000000;										
+maxIndex := -1;										
+maxVal := -2000000000;										
+FOR i := 1 TO buffCount DO										
+IF decBuff1[i] > maxVal THEN BEGIN										
+maxIndex := i;										
+maxVal := decBuff1[i];										
+minLineNo := intBuff[i];										
+END ELSE IF (decBuff1[i] = maxVal) THEN										
+IF minLineNo > intBuff[i] THEN BEGIN										
+maxIndex := i;										
+minLineNo := intBuff[i];										
+END;										
+										
+IF maxIndex = -1 THEN										
+EXIT(FALSE);										
+										
+intVal := intBuff[maxIndex];										
+decVal1 := decBuff1[maxIndex];										
+decVal2 := decBuff2[maxIndex];										
+										
+DeleteIndexList(maxIndex);										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE GetIndexList@8(index@1000 : Integer;VAR intVal@1001 : Integer;VAR decVal1@1002 : Decimal;VAR decVal2@1003 : Decimal;VAR co	deV	al@	10	4	: Code[20]) : Boolean;					
+BEGIN										
+//GetIndexList										
+IF (index > buffCount) OR (index < 1) THEN										
+EXIT(FALSE);										
+										
+intVal := intBuff[index];										
+decVal1 := decBuff1[index];										
+decVal2 := decBuff2[index];										
+codeVal := codeBuff[index];										
+										
+EXIT(TRUE);										
+END;										
+										
+PROCEDURE DeleteIndexList@6(index@1000 : Integer);										
+VAR										
+i@1001 : Integer;										
+BEGIN										
+//DeleteIndexList										
+IF (index > buffCount) OR (index < 1) THEN										
+EXIT;										
+										
+FOR i := index TO buffCount DO BEGIN										
+intBuff[i] := intBuff[i + 1];										
+decBuff1[i] := decBuff1[i + 1];										
+decBuff2[i] := decBuff2[i + 1];										
+codeBuff[i] := codeBuff[i + 1];										
+END;										
+										
+buffCount := buffCount - 1;										
+END;										
+										
+PROCEDURE CountList@9() : Integer;										
+BEGIN										
+//CountList										
+EXIT(buffCount);										
+END;										
+										
+PROCEDURE CopyList@1(VAR list@1000 : Codeunit 99008907);										
+VAR										
+i@1001 : Integer;										
+tmpInt@1002 : Integer;										
+tmpDec1@1003 : Decimal;										
+tmpDec2@1004 : Decimal;										
+tmpCode@1005 : Code[20];										
+BEGIN										
+//CopyList										
+FOR i := list.CountList DOWNTO 1 DO BEGIN										
+"list.GetIndexList(i,tmpInt,tmpDec1,tmpDec2,tmpCode);"										
+"AddToList(tmpInt,tmpDec1,tmpDec2,tmpCode);"										
+END;										
+END;										
+										
+PROCEDURE Compress@4();										
+VAR										
+i@1000 : Integer;										
+j@1001 : Integer;										
+tmp1@1002 : Decimal;										
+tmp2@1003 : Decimal;										
+BEGIN										
+//Compress										
+FOR i := 1 TO buffCount DO BEGIN										
+tmp1 := decBuff2[i];										
+IF decBuff2[i] < 0 THEN BEGIN										
+FOR j := 1 TO buffCount DO BEGIN										
+tmp2 := decBuff2[j];										
+IF (decBuff2[i] < 0) AND (decBuff2[j] > 0) AND (codeBuff[j] = codeBuff[i]) THEN BEGIN										
+decBuff2[j] := decBuff2[j] + decBuff2[i];										
+IF decBuff2[j] <= 0 THEN BEGIN										
+decBuff2[i] := decBuff2[j];										
+decBuff2[j] := 0;										
+END ELSE										
+decBuff2[i] := 0;										
+END;										
+END;										
+END;										
+END;										
+										
+i := 1;										
+WHILE i < buffCount DO BEGIN										
+tmp1 := decBuff2[i];										
+IF decBuff2[i] = 0 THEN										
+DeleteIndexList(i)										
+ELSE										
+i := i + 1;										
+END;										
+END;										
+										
+PROCEDURE ReOrderToSmallestList@1100409001();										
+VAR										
+i@1100409000 : Integer;										
+j@1100409001 : Integer;										
+_intBuff@1100409005 : ARRAY [250] OF Integer;										
+_intVal@1100409007 : Integer;										
+_decBuff1@1100409004 : ARRAY [250] OF Decimal;										
+_decVal1@1100409008 : Decimal;										
+_decBuff2@1100409003 : ARRAY [250] OF Decimal;										
+_decVal2@1100409009 : Decimal;										
+_codeBuff@1100409002 : ARRAY [250] OF Code[20];										
+_codeVal@1100409010 : Code[20];										
+_buffCount@1100409006 : Integer;										
+BEGIN										
+//ReOrderToSmallestList										
+_buffCount := buffCount;										
+										
+FOR i := 1 TO _buffCount DO BEGIN										
+"GetSmallestList(_intVal,_decVal1,_decVal2,_codeVal);"										
+										
+_intBuff[i]  := _intVal;										
+_decBuff1[i] := _decVal1;										
+_decBuff2[i] := _decVal2;										
+_codeBuff[i] := _codeVal;										
+END;										
+										
+FOR i := 1 TO _buffCount DO BEGIN										
+intBuff[i]  := _intBuff[i];										
+decBuff1[i] := _decBuff1[i];										
+decBuff2[i] := _decBuff2[i];										
+codeBuff[i] := _codeBuff[i];										
+END;										
+buffCount := _buffCount;										
+END;										
+										
+PROCEDURE GetSmallestList@1100409000(VAR intVal@1001 : Integer;VAR decVal1@1002 : Decimal;VAR decVal2@1003 : Decimal;VAR codeVal@110	40	900	0	: C	ode[20]) : Boolean;					
+VAR										
+minIndex@1004 : Integer;										
+minVal@1005 : Decimal;										
+i@1006 : Integer;										
+minLineNo@1007 : Integer;										
+BEGIN										
+//GetSmallestList										
+										
+										
+minLineNo := 2000000000;										
+minIndex := -1;										
+minVal := 2000000000;										
+										
+FOR i := 1 TO buffCount DO										
+IF decBuff1[i] < minVal THEN BEGIN										
+minIndex := i;										
+minVal := decBuff1[i];										
+minLineNo := intBuff[i];										
+END										
+ELSE IF (decBuff1[i] = minVal) THEN										
+IF minLineNo > intBuff[i] THEN BEGIN										
+minIndex := i;										
+minLineNo := intBuff[i];										
+END;										
+										
+IF minIndex = -1 THEN										
+EXIT(FALSE);										
+										
+intVal := intBuff[minIndex];										
+decVal1 := decBuff1[minIndex];										
+decVal2 := decBuff2[minIndex];										
+										
+DeleteIndexList(minIndex);										
+										
+EXIT(TRUE);										
+END;										
+										
+BEGIN										
+END.										
+}										
+}										
+										
